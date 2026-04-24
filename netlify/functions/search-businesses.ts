@@ -126,14 +126,16 @@ export const handler: Handler = async (event) => {
 
   try {
     const query = `${SECTOR_QUERY[sector]} in ${location}`;
-    let results = await placesTextSearch(query, apiKey);
+    const raw = await placesTextSearch(query, apiKey);
+    const totalFound = raw.length;
+    let results = raw;
     if (noWebsiteOnly) results = results.filter((r) => !r.has_website);
     results = results
       .filter((r) => (r.rating ?? 0) >= minRating)
       .filter((r) => (r.user_ratings_total ?? 0) >= minReviews)
       .filter((r) => r.business_status !== "CLOSED_PERMANENTLY")
       .slice(0, maxResults);
-    return jsonRes(200, { businesses: results, demo: false });
+    return jsonRes(200, { businesses: results, demo: false, totalFound });
   } catch (err) {
     return jsonRes(500, {
       error: err instanceof Error ? err.message : String(err),

@@ -13,6 +13,7 @@ export default function App() {
   const [demoNote, setDemoNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searchRev, setSearchRev] = useState(0); // bumps on each successful search -> triggers flash
+  const [totalFound, setTotalFound] = useState<number | undefined>();
 
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [busyId, setBusyId] = useState<string | undefined>();
@@ -44,6 +45,7 @@ export default function App() {
       setResults(r.businesses);
       setDemoMode(r.demo);
       setDemoNote(r.note ?? null);
+      setTotalFound(r.totalFound);
       setSearchRev((n) => n + 1);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -73,11 +75,8 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <div className="brand-logo">S</div>
-          <div>
-            <h1>SitePilot</h1>
-            <small>Lead finder · mock site generator</small>
-          </div>
+          <img src="/logo.png" alt="SitePilot" className="brand-img" />
+          <small>Lead finder · mock site generator</small>
         </div>
 
         {demoMode && (
@@ -128,7 +127,7 @@ export default function App() {
           </div>
         )}
 
-        {results.length === 0 && !searching && !error && (
+        {results.length === 0 && !searching && !error && !lastFilters && (
           <div className="empty-state">
             <h3>No results yet</h3>
             <p>
@@ -138,10 +137,19 @@ export default function App() {
           </div>
         )}
 
-        {results.length === 0 && !searching && error && (
+        {results.length === 0 && !searching && !error && lastFilters && (
           <div className="empty-state">
-            <h3>No results</h3>
-            <p>Try a different sector, location, or lower the rating / review filters.</p>
+            <h3>No matches</h3>
+            <p>
+              {typeof totalFound === "number" && totalFound > 0
+                ? `Google returned ${totalFound} place${totalFound === 1 ? "" : "s"}, but your filters removed them all.`
+                : "Google returned nothing for this query."}
+            </p>
+            <p style={{ marginTop: 10, fontSize: 13, color: "var(--text-muted)" }}>
+              Try lowering <strong>min reviews</strong> / <strong>min rating</strong>,
+              unticking <strong>Only without a website</strong>, or broadening the location
+              (e.g. <em>Sifnos</em> instead of <em>Apollonia</em>).
+            </p>
           </div>
         )}
 

@@ -19,6 +19,7 @@ export interface SearchResponse {
   businesses: BusinessBasic[];
   demo: boolean;
   note?: string;
+  totalFound?: number;
 }
 
 export function searchBusinesses(filters: SearchFilters): Promise<SearchResponse> {
