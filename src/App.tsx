@@ -76,7 +76,7 @@ export default function App() {
       <aside className="sidebar">
         <div className="brand">
           <img src="/logo.png" alt="SitePilot" className="brand-img" />
-          <small>Lead finder · mock site generator</small>
+          <small>Mock Site Generator</small>
         </div>
 
         {demoMode && (
