@@ -3,6 +3,7 @@ import "./App.css";
 import { SearchForm } from "./components/SearchForm";
 import { ResultsTable } from "./components/ResultsTable";
 import { SitePreview } from "./components/SitePreview";
+import { ScreenshotImport } from "./components/ScreenshotImport";
 import { fetchDetails, generateSite, searchBusinesses } from "./lib/api";
 import type { BusinessBasic, BusinessDetails, GeneratedSite, SearchFilters } from "./types";
 
@@ -92,6 +93,50 @@ export default function App() {
         )}
 
         <SearchForm onSearch={runSearch} loading={searching} demoMode={demoMode} />
+
+        {!demoMode && (
+          <div style={{ marginTop: 20 }}>
+            <div
+              style={{
+                fontSize: 11,
+                textTransform: "uppercase",
+                letterSpacing: "0.06em",
+                color: "var(--text-muted)",
+                marginBottom: 8,
+              }}
+            >
+              Or import from screenshot
+            </div>
+            <ScreenshotImport
+              locationHint={lastFilters?.location}
+              onImported={(businesses, names) => {
+                setError(null);
+                if (businesses.length > 0) {
+                  // Merge with existing results, dedupe by place_id.
+                  setResults((prev) => {
+                    const byId = new Map<string, BusinessBasic>();
+                    for (const b of prev) byId.set(b.place_id, b);
+                    for (const b of businesses) byId.set(b.place_id, b);
+                    return Array.from(byId.values());
+                  });
+                  setLastFilters(
+                    (prev) =>
+                      prev ?? {
+                        sector: "restaurant",
+                        location: `imported: ${names.slice(0, 3).join(", ")}${names.length > 3 ? "…" : ""}`,
+                        noWebsiteOnly: false,
+                        minRating: 0,
+                        minReviews: 0,
+                        maxResults: 60,
+                      },
+                  );
+                  setSearchRev((n) => n + 1);
+                }
+              }}
+              onError={(msg) => setError(msg)}
+            />
+          </div>
+        )}
 
         <div style={{ marginTop: 20, fontSize: 12, color: "var(--text-muted)" }}>
           Tip: Spec rules are loaded from <code>SPEC.md</code> and applied by the

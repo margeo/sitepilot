@@ -9,6 +9,9 @@
 [functions."generate-site"]
   timeout = 60
 
+[functions."extract-listings"]
+  timeout = 60
+
 [dev]
   command = "npm run dev:vite"
   port = 8888

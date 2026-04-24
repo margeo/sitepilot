@@ -58,3 +58,19 @@ export interface LocationSuggestion {
 export function autocompleteLocation(input: string): Promise<{ suggestions: LocationSuggestion[] }> {
   return post<{ suggestions: LocationSuggestion[] }>("autocomplete-location", { input });
 }
+
+export interface ExtractListingsResponse {
+  businesses: BusinessBasic[];
+  extractedNames: string[];
+  note?: string;
+}
+
+export function extractListings(
+  imageDataUrl: string,
+  locationHint?: string,
+): Promise<ExtractListingsResponse> {
+  return post<ExtractListingsResponse>("extract-listings", {
+    image: imageDataUrl,
+    locationHint,
+  });
+}

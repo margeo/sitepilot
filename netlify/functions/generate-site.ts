@@ -1,7 +1,7 @@
 import type { Handler } from "@netlify/functions";
-import Anthropic from "@anthropic-ai/sdk";
 import { buildTemplateSite, type TemplateBusiness } from "./_shared/template";
 import { SECTOR_THEMES, type Sector } from "./_shared/sectors";
+import { callLLM, hasLLM } from "./_shared/llm";
 
 interface Body {
   business: {
@@ -66,9 +66,6 @@ export const handler: Handler = async (event) => {
     photo_urls,
   };
 
-  const anthKey = process.env.ANTHROPIC_API_KEY;
-
-  // SEO keywords + suggested pages — always derivable from sector + name
   const seo_keywords = [
     ...theme.keywords,
     b.name.toLowerCase(),
@@ -76,8 +73,8 @@ export const handler: Handler = async (event) => {
   ];
   const suggested_pages = theme.suggestedPages;
 
-  // Fallback / no-key path: use the template
-  if (!anthKey) {
+  // No LLM configured: fall back to static template.
+  if (!hasLLM()) {
     const html = buildTemplateSite(templateBusiness);
     return jsonRes(200, {
       site: { html, seo_keywords, suggested_pages, generated_by: "template" },
@@ -85,9 +82,7 @@ export const handler: Handler = async (event) => {
     });
   }
 
-  // Claude-enhanced path: ask Claude to produce custom copy, swap into template.
   try {
-    const client = new Anthropic({ apiKey: anthKey });
     const reviewSummaries = (b.reviews ?? [])
       .slice(0, 5)
       .map((r) => `- ${r.author ?? "Reviewer"} (${r.rating ?? "?"}): ${(r.text ?? "").slice(0, 200)}`)
@@ -95,8 +90,9 @@ export const handler: Handler = async (event) => {
 
     const systemPrompt = [
       "You are a senior copywriter and UX strategist creating a website proposal for a local business.",
-      "You must produce SHORT, natural, conversion-focused copy.",
-      "Never invent specific facts (prices, dishes, awards) that aren't in the supplied data.",
+      "Produce SHORT, natural, conversion-focused copy that feels specific to THIS business, not generic.",
+      "Draw on the reviews and editorial summary to capture the business's actual vibe.",
+      "Never invent specific facts (prices, dishes, awards) that are not in the supplied data.",
       "Return strictly valid JSON — no prose outside the JSON object.",
     ].join(" ");
 
@@ -111,23 +107,20 @@ ${reviewSummaries || "(none)"}
 
 Produce JSON with these exact keys:
 {
-  "tagline": "12-18 word hero subtitle",
+  "tagline": "12-18 word hero subtitle that captures the vibe",
   "about_text": "90-150 word About paragraph. Friendly, specific to the business. No made-up facts.",
   "seo_keywords": ["array of 6-10 keywords"],
   "additional_tagline_short": "6-word punchy version for meta description"
 }`;
 
-    const msg = await client.messages.create({
-      model: "claude-sonnet-4-6",
-      max_tokens: 900,
+    const { text: raw, provider, model } = await callLLM({
       system: systemPrompt,
-      messages: [{ role: "user", content: userPrompt }],
+      user: userPrompt,
+      maxTokens: 900,
     });
 
-    const textBlock = msg.content.find((c) => c.type === "text");
-    const raw = textBlock && "text" in textBlock ? textBlock.text : "";
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error("Claude returned no JSON object");
+    if (!jsonMatch) throw new Error(`LLM (${provider} ${model}) returned no JSON object`);
     const parsed = JSON.parse(jsonMatch[0]) as {
       tagline?: string;
       about_text?: string;
@@ -135,16 +128,9 @@ Produce JSON with these exact keys:
       additional_tagline_short?: string;
     };
 
-    const enriched: TemplateBusiness = {
+    let html = buildTemplateSite({
       ...templateBusiness,
       editorial_summary: parsed.about_text || templateBusiness.editorial_summary,
-    };
-    // Swap the hero tagline into the template by overriding editorial_summary.
-    // The template uses editorial_summary for both hero subtitle and About.
-    // We'll inject the tagline directly in the hero via a marker swap:
-    let html = buildTemplateSite({
-      ...enriched,
-      editorial_summary: parsed.about_text,
     });
     if (parsed.tagline) {
       html = html.replace(
@@ -158,19 +144,22 @@ Produce JSON with these exact keys:
         html,
         seo_keywords: parsed.seo_keywords?.length ? parsed.seo_keywords : seo_keywords,
         suggested_pages,
-        generated_by: "claude",
+        generated_by: provider === "openrouter" ? "openrouter" : "claude",
       },
       demo: false,
     });
   } catch (err) {
-    // Fail gracefully to the template.
+    // Graceful fallback: template site + note about the failure.
     const html = buildTemplateSite(templateBusiness);
     return jsonRes(200, {
       site: {
-        html, seo_keywords, suggested_pages, generated_by: "template",
+        html,
+        seo_keywords,
+        suggested_pages,
+        generated_by: "template",
       },
       demo: false,
-      note: `Claude generation failed, used template. Reason: ${err instanceof Error ? err.message : String(err)}`,
+      note: `LLM generation failed, used template. Reason: ${err instanceof Error ? err.message : String(err)}`,
     });
   }
 };
