@@ -15,11 +15,20 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
+  const text = await res.text();
   if (!res.ok && res.status !== 202) {
-    const text = await res.text();
-    throw new Error(`${path} failed (${res.status}): ${text}`);
+    throw new Error(`${path} failed (${res.status}): ${text || "(empty body)"}`);
   }
-  return (await res.json()) as T;
+  if (!text) {
+    throw new Error(`${path} returned empty body (status ${res.status})`);
+  }
+  try {
+    return JSON.parse(text) as T;
+  } catch {
+    throw new Error(
+      `${path} returned non-JSON (status ${res.status}): ${text.slice(0, 200)}`,
+    );
+  }
 }
 
 export interface SearchResponse {
