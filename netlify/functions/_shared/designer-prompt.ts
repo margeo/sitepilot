@@ -112,7 +112,17 @@ Small discreet footer: brand italic serif, nav links, "© <current year> <brand>
 
 Produce the complete bilingual HTML now. No commentary before or after it.`;
 
-export const DESIGNER_SYSTEM = `${FRONTEND_DESIGN_SKILL}\n\n${SITEPILOT_RULES}`;
+// Full system prompt: used for paths that can NOT load the skill natively
+// (OpenRouter for every model, Gemini direct). The skill text is pasted inline.
+export const DESIGNER_SYSTEM_FULL = `${FRONTEND_DESIGN_SKILL}\n\n${SITEPILOT_RULES}`;
+
+// Rules-only system prompt: used for Anthropic-direct paths that load the
+// frontend-design skill natively via container.skills. Claude gets the skill
+// at inference time; we only need to tell it the SitePilot-specific rules.
+export const DESIGNER_SYSTEM_RULES_ONLY = SITEPILOT_RULES;
+
+// Back-compat alias for any callsite that used the old constant name.
+export const DESIGNER_SYSTEM = DESIGNER_SYSTEM_FULL;
 
 export interface DesignerBusiness {
   name: string;

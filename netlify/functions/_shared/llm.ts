@@ -22,6 +22,9 @@ export interface DesignerInput {
   system: string;
   user: string;
   maxTokens?: number;
+  // When set, and provider is "anthropic", Claude loads the named Anthropic
+  // skill natively via container.skills instead of relying on system-prompt text.
+  anthropicSkillId?: string;
 }
 
 const OPENROUTER_URL = "https://openrouter.ai/api/v1/chat/completions";
@@ -49,6 +52,13 @@ export async function callDesigner(input: DesignerInput): Promise<LLMResult> {
   if (provider === "anthropic") {
     const key = process.env.ANTHROPIC_API_KEY;
     if (!key) throw new Error("ANTHROPIC_API_KEY not set");
+    if (input.anthropicSkillId) {
+      return callAnthropicWithSkill(key, model, input.anthropicSkillId, {
+        system: input.system,
+        user: input.user,
+        maxTokens: input.maxTokens,
+      });
+    }
     return callAnthropicFull(key, model, {
       system: input.system,
       user: input.user,
@@ -68,6 +78,47 @@ async function callAnthropicFull(key: string, model: string, input: LLMInput): P
   });
   const block = msg.content.find((c) => c.type === "text");
   const text = block && "text" in block ? block.text : "";
+  return {
+    text,
+    provider: "anthropic",
+    model,
+    usage: { input_tokens: msg.usage?.input_tokens, output_tokens: msg.usage?.output_tokens },
+  };
+}
+
+// Native skill loading: Claude auto-injects the named Anthropic skill (e.g.
+// "frontend-design") via container.skills. Requires beta headers
+// skills-2025-10-02 and code-execution-2025-08-25 + the code_execution tool.
+// See https://platform.claude.com/docs/en/build-with-claude/skills-guide.
+async function callAnthropicWithSkill(
+  key: string,
+  model: string,
+  skillId: string,
+  input: LLMInput,
+): Promise<LLMResult> {
+  const client = new Anthropic({ apiKey: key });
+  // The SDK's typed surface may not include container/skills yet; cast the
+  // request body so we can still build it.
+  const body = {
+    model,
+    max_tokens: input.maxTokens ?? 16000,
+    betas: ["code-execution-2025-08-25", "skills-2025-10-02"],
+    system: input.system,
+    container: {
+      skills: [{ type: "anthropic", skill_id: skillId, version: "latest" }],
+    },
+    tools: [{ type: "code_execution_20250825", name: "code_execution" }],
+    messages: [{ role: "user", content: [{ type: "text", text: input.user }] }],
+  } as unknown as Parameters<typeof client.beta.messages.create>[0];
+
+  const msg = (await client.beta.messages.create(body)) as {
+    content: Array<{ type: string; text?: string }>;
+    usage?: { input_tokens?: number; output_tokens?: number };
+  };
+  const text = msg.content
+    .filter((c) => c.type === "text")
+    .map((c) => c.text ?? "")
+    .join("");
   return {
     text,
     provider: "anthropic",

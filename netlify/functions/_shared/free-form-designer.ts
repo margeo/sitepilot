@@ -4,7 +4,12 @@
 
 import type { Dossier } from "./dossier";
 import { callDesigner } from "./llm";
-import { DESIGNER_SYSTEM, buildDesignerUserPrompt, type DesignerBusiness } from "./designer-prompt";
+import {
+  DESIGNER_SYSTEM_FULL,
+  DESIGNER_SYSTEM_RULES_ONLY,
+  buildDesignerUserPrompt,
+  type DesignerBusiness,
+} from "./designer-prompt";
 
 export interface FreeFormInput {
   dossier: Dossier;
@@ -22,11 +27,18 @@ export interface FreeFormResult {
 
 export async function designSiteFreeForm(input: FreeFormInput): Promise<FreeFormResult> {
   const t0 = Date.now();
+  // For Anthropic-direct paths (options 6-8), load the `frontend-design` skill
+  // natively via container.skills and only pass SitePilot-specific rules in
+  // the system prompt. For all other paths (OpenRouter / Gemini), paste the
+  // full skill text into the system prompt since those providers can't load
+  // Anthropic skills natively.
+  const isAnthropicDirect = input.modelId.startsWith("anthropic:");
   const result = await callDesigner({
     modelId: input.modelId,
-    system: DESIGNER_SYSTEM,
+    system: isAnthropicDirect ? DESIGNER_SYSTEM_RULES_ONLY : DESIGNER_SYSTEM_FULL,
     user: buildDesignerUserPrompt({ dossier: input.dossier, business: input.business }),
     maxTokens: 16000,
+    anthropicSkillId: isAnthropicDirect ? "frontend-design" : undefined,
   });
   const html = extractHtml(result.text);
   if (!html) throw new Error(`Free-form designer returned no HTML. Raw: ${result.text.slice(0, 300)}`);
