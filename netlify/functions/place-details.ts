@@ -39,7 +39,7 @@ function computeLeadScore(b: {
   else if (rc >= 100) { score += 1; reasons.push("+1 solid review volume (≥100)"); }
   else if (rc < 15) { score -= 1; reasons.push("-1 very low review count (<15)"); }
   if (b.phones.mobiles.length > 0) { score += 1; reasons.push("+1 mobile number (WhatsApp-ready)"); }
-  const premium: Sector[] = ["villa", "hotel", "boutique", "boat_rental"];
+  const premium: Sector[] = ["accommodations", "boutique", "boat_rental"];
   if (premium.includes(sector)) { score += 1; reasons.push(`+1 premium sector (${sector})`); }
   if (/villa|suite|resort|boutique|luxury|premium/i.test(`${b.name} ${b.editorial_summary ?? ""}`)) {
     score += 1; reasons.push("+1 premium brand cues");

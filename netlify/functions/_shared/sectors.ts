@@ -1,9 +1,7 @@
 export type Sector =
-  | "restaurant"
-  | "tavern"
+  | "restaurants_tavernas"
   | "beach_bar"
-  | "villa"
-  | "hotel"
+  | "accommodations"
   | "boutique"
   | "car_rental"
   | "boat_rental"
@@ -32,27 +30,18 @@ export interface SectorTheme {
 }
 
 export const SECTOR_THEMES: Record<Sector, SectorTheme> = {
-  restaurant: {
-    label: "Restaurant",
+  restaurants_tavernas: {
+    label: "Restaurants & Tavernas",
     primary: "#8a1a1a", primaryDark: "#5c0f0f", accent: "#d4a24c",
     bgTint: "#faf5ec", heroOverlay: "rgba(20,10,5,0.55)",
     servicesLabel: "Menu", servicesSingular: "dish",
     tagline: "Authentic flavours, warm hospitality.",
     aboutHeading: "Our story",
     ctaReserve: "Reserve a table",
-    keywords: ["restaurant", "dining", "cuisine", "menu", "reservation"],
-    suggestedPages: ["Home", "Menu", "Gallery", "Visit & Contact"],
-    hasMenu: true, hasRooms: false, hasGallery: true,
-  },
-  tavern: {
-    label: "Tavern",
-    primary: "#2d5a3f", primaryDark: "#1a3a28", accent: "#e7b04b",
-    bgTint: "#f7f3e8", heroOverlay: "rgba(15,25,15,0.55)",
-    servicesLabel: "Menu", servicesSingular: "dish",
-    tagline: "Family-run taverna — traditional dishes, local ingredients.",
-    aboutHeading: "A family story",
-    ctaReserve: "Reserve a table",
-    keywords: ["taverna", "traditional", "greek food", "family-run", "local cuisine"],
+    keywords: [
+      "restaurant", "taverna", "dining", "cuisine", "menu", "reservation",
+      "greek food", "traditional", "family-run", "local cuisine",
+    ],
     suggestedPages: ["Home", "Menu", "Gallery", "Visit & Contact"],
     hasMenu: true, hasRooms: false, hasGallery: true,
   },
@@ -68,27 +57,18 @@ export const SECTOR_THEMES: Record<Sector, SectorTheme> = {
     suggestedPages: ["Home", "Drinks", "Gallery", "Visit & Contact"],
     hasMenu: true, hasRooms: false, hasGallery: true,
   },
-  villa: {
-    label: "Villa / Rental",
-    primary: "#1e3c52", primaryDark: "#0f2230", accent: "#c49762",
-    bgTint: "#f4ede3", heroOverlay: "rgba(10,20,30,0.50)",
-    servicesLabel: "The Villa", servicesSingular: "room",
-    tagline: "A private retreat, steps from the sea.",
-    aboutHeading: "About the villa",
-    ctaReserve: "Check availability",
-    keywords: ["villa rental", "private pool", "holiday villa", "luxury stay"],
-    suggestedPages: ["Home", "The Villa", "Gallery", "Book & Contact"],
-    hasMenu: false, hasRooms: true, hasGallery: true,
-  },
-  hotel: {
-    label: "Hotel",
+  accommodations: {
+    label: "Accommodations",
     primary: "#14323f", primaryDark: "#091b22", accent: "#c8a86b",
     bgTint: "#f2ece1", heroOverlay: "rgba(10,25,30,0.50)",
     servicesLabel: "Rooms & Suites", servicesSingular: "room",
     tagline: "Your seaside escape, curated with care.",
     aboutHeading: "About us",
     ctaReserve: "Book a room",
-    keywords: ["hotel", "suites", "boutique hotel", "seaside stay"],
+    keywords: [
+      "hotel", "villa", "guesthouse", "apartment", "holiday rental",
+      "studio", "bed and breakfast", "boutique hotel", "seaside stay", "private pool",
+    ],
     suggestedPages: ["Home", "Rooms", "Gallery", "Book & Contact"],
     hasMenu: false, hasRooms: true, hasGallery: true,
   },
@@ -157,11 +137,15 @@ export const SECTOR_THEMES: Record<Sector, SectorTheme> = {
 export function sectorFromGoogleTypes(types: string[] | undefined, hint?: Sector): Sector {
   const t = (types ?? []).map((x) => x.toLowerCase());
   if (hint) return hint;
-  if (t.includes("lodging")) return "hotel";
+  if (t.includes("lodging") || t.includes("hotel") || t.includes("guest_house") || t.includes("bed_and_breakfast")) {
+    return "accommodations";
+  }
   if (t.includes("bar") || t.includes("night_club")) return "beach_bar";
   if (t.includes("car_rental")) return "car_rental";
   if (t.includes("beauty_salon") || t.includes("hair_care") || t.includes("spa")) return "beauty_wellness";
   if (t.includes("clothing_store") || t.includes("shoe_store") || t.includes("jewelry_store")) return "boutique";
-  if (t.includes("restaurant") || t.includes("food") || t.includes("cafe")) return "restaurant";
+  if (t.includes("restaurant") || t.includes("food") || t.includes("cafe") || t.includes("greek_restaurant")) {
+    return "restaurants_tavernas";
+  }
   return "local_services";
 }

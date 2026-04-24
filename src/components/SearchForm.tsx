@@ -41,7 +41,7 @@ export function SearchForm({
   const researchModelHint = researchModel
     ? DESIGN_MODELS.find((m) => m.value === researchModel)?.hint
     : undefined;
-  const [sector, setSector] = useState<Sector>("restaurant");
+  const [sector, setSector] = useState<Sector>("restaurants_tavernas");
   const [location, setLocation] = useState("Paros, Greece");
   const [noWebsiteOnly, setNoWebsiteOnly] = useState(true);
   const [minRating, setMinRating] = useState(4.0);

@@ -1,9 +1,7 @@
 export type Sector =
-  | "restaurant"
-  | "tavern"
+  | "restaurants_tavernas"
   | "beach_bar"
-  | "villa"
-  | "hotel"
+  | "accommodations"
   | "boutique"
   | "car_rental"
   | "boat_rental"
@@ -18,11 +16,9 @@ export interface SectorOption {
 }
 
 export const SECTORS: SectorOption[] = [
-  { value: "restaurant", label: "Restaurants", googleType: "restaurant" },
-  { value: "tavern", label: "Taverns", googleType: "restaurant", keyword: "tavern" },
+  { value: "restaurants_tavernas", label: "Restaurants & Tavernas", googleType: "restaurant" },
   { value: "beach_bar", label: "Beach bars", googleType: "bar", keyword: "beach bar" },
-  { value: "villa", label: "Villas / rentals", googleType: "lodging", keyword: "villa" },
-  { value: "hotel", label: "Hotels", googleType: "lodging", keyword: "hotel" },
+  { value: "accommodations", label: "Accommodations (hotels, villas, apartments)", googleType: "lodging" },
   { value: "boutique", label: "Boutiques", googleType: "clothing_store", keyword: "boutique" },
   { value: "car_rental", label: "Car rentals", googleType: "car_rental" },
   { value: "boat_rental", label: "Boat rentals", googleType: "point_of_interest", keyword: "boat rental" },

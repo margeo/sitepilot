@@ -43,7 +43,7 @@ export function computeLeadScore(
     reasons.push("+1 mobile number found (WhatsApp-ready)");
   }
 
-  const premiumSectors: Sector[] = ["villa", "hotel", "boutique", "boat_rental"];
+  const premiumSectors: Sector[] = ["accommodations", "boutique", "boat_rental"];
   if (premiumSectors.includes(sector)) {
     score += 1;
     reasons.push(`+1 premium sector (${sector})`);

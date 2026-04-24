@@ -18,14 +18,14 @@ export interface DemoBusiness {
 }
 
 export const DEMO_DATA: Record<Sector, DemoBusiness[]> = {
-  restaurant: [
+  restaurants_tavernas: [
     {
       place_id: "demo_rest_1",
       name: "Taverna Aegean Blue",
       address: "Paralia Naousa, Paros 844 01",
       formatted_address: "Paralia Naousa, Paros 84401, Greece",
       rating: 4.7, user_ratings_total: 342, types: ["restaurant", "food"],
-      has_website: false, sector_hint: "restaurant",
+      has_website: false, sector_hint: "restaurants_tavernas",
       phone_numbers: ["+30 6944 123 456", "+30 22840 51234"],
       opening_hours: ["Mon–Sun: 12:00–00:00", "Seasonal: May–October"],
       editorial_summary: "Waterfront taverna in Naousa known for grilled fish and hand-made mezes.",
@@ -42,7 +42,7 @@ export const DEMO_DATA: Record<Sector, DemoBusiness[]> = {
       address: "Marpissa, Paros",
       formatted_address: "Marpissa village, Paros, Greece",
       rating: 4.6, user_ratings_total: 128, types: ["restaurant"],
-      has_website: false, sector_hint: "restaurant",
+      has_website: false, sector_hint: "restaurants_tavernas",
       phone_numbers: ["+30 6937 998 877"],
       opening_hours: ["Tue–Sun: 19:00–23:30", "Closed Mondays"],
       reviews: [
@@ -50,15 +50,13 @@ export const DEMO_DATA: Record<Sector, DemoBusiness[]> = {
       ],
       photo_refs: [],
     },
-  ],
-  tavern: [
     {
       place_id: "demo_tav_1",
       name: "Taverna To Steki",
       address: "Lefkes, Paros",
       formatted_address: "Central square, Lefkes, Paros, Greece",
-      rating: 4.8, user_ratings_total: 210, types: ["restaurant"],
-      has_website: false, sector_hint: "tavern",
+      rating: 4.8, user_ratings_total: 210, types: ["restaurant", "greek_restaurant"],
+      has_website: false, sector_hint: "restaurants_tavernas",
       phone_numbers: ["+30 6972 334 455"],
       opening_hours: ["Daily: 13:00–01:00"],
       editorial_summary: "Traditional mountain taverna run by the same family for three generations.",
@@ -84,14 +82,14 @@ export const DEMO_DATA: Record<Sector, DemoBusiness[]> = {
       photo_refs: [],
     },
   ],
-  villa: [
+  accommodations: [
     {
       place_id: "demo_villa_1",
       name: "Villa Althea",
       address: "Santa Maria, Paros",
       formatted_address: "Santa Maria, Paros 84401, Greece",
-      rating: 4.9, user_ratings_total: 48, types: ["lodging"],
-      has_website: false, sector_hint: "villa",
+      rating: 4.9, user_ratings_total: 48, types: ["lodging", "guest_house"],
+      has_website: false, sector_hint: "accommodations",
       phone_numbers: ["+30 6948 776 655"],
       opening_hours: ["Seasonal: April–October"],
       editorial_summary: "A private three-bedroom villa with pool, minutes from Santa Maria beach.",
@@ -100,15 +98,13 @@ export const DEMO_DATA: Record<Sector, DemoBusiness[]> = {
       ],
       photo_refs: [],
     },
-  ],
-  hotel: [
     {
       place_id: "demo_hotel_1",
       name: "Hotel Meltemi Bay",
       address: "Piso Livadi, Paros",
       formatted_address: "Piso Livadi, Paros 84400, Greece",
-      rating: 4.4, user_ratings_total: 220, types: ["lodging"],
-      has_website: false, sector_hint: "hotel",
+      rating: 4.4, user_ratings_total: 220, types: ["lodging", "hotel"],
+      has_website: false, sector_hint: "accommodations",
       phone_numbers: ["+30 6941 223 344", "+30 22840 41555"],
       opening_hours: ["Seasonal: May–October"],
       reviews: [

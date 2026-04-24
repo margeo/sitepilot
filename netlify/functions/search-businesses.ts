@@ -34,29 +34,21 @@ interface SectorConfig {
 // Deep mode: multiple phrasings, NO includedType filter, paginated to 3 pages each — returns
 // 60–200 results in 10–25s. Deep mode is noticeably more expensive (6× more API calls).
 const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
-  restaurant: {
-    quickQueries: ["restaurants"],
+  restaurants_tavernas: {
+    quickQueries: ["restaurants and tavernas"],
     deepQueries: [
       "restaurants",
       "tavernas",
+      "Greek tavernas",
+      "traditional tavernas",
+      "meze restaurants",
+      "ouzeri",
       "bistros",
       "eateries",
       "fine dining",
       "family restaurants",
     ],
-    includedTypes: ["restaurant"],
-  },
-  tavern: {
-    quickQueries: ["Greek tavernas"],
-    deepQueries: [
-      "Greek tavernas",
-      "traditional tavernas",
-      "meze restaurants",
-      "ouzeri",
-      "village tavernas",
-      "family-run tavernas",
-    ],
-    includedTypes: ["greek_restaurant"],
+    includedTypes: ["restaurant", "greek_restaurant", "seafood_restaurant"],
   },
   beach_bar: {
     quickQueries: ["beach bars"],
@@ -70,32 +62,32 @@ const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
     ],
     includedTypes: ["bar"],
   },
-  villa: {
-    quickQueries: ["guest houses cottages apartments"],
-    deepQueries: [
-      "villas",
-      "apartments for rent",
-      "holiday rentals",
-      "studios",
-      "traditional stone houses",
-      "bed and breakfasts",
-      "guesthouses",
-      "seaside apartments",
-      "family-run accommodations",
-    ],
-    includedTypes: ["guest_house", "cottage", "bed_and_breakfast", "private_guest_room", "lodging", "inn"],
-  },
-  hotel: {
-    quickQueries: ["hotels"],
+  accommodations: {
+    quickQueries: ["hotels villas and apartments"],
     deepQueries: [
       "hotels",
+      "villas",
+      "apartments for rent",
       "boutique hotels",
       "resorts",
-      "small hotels",
-      "design hotels",
-      "luxury hotels",
+      "holiday rentals",
+      "studios",
+      "guesthouses",
+      "bed and breakfasts",
+      "traditional stone houses",
+      "seaside apartments",
     ],
-    includedTypes: ["hotel", "resort_hotel", "motel", "inn"],
+    includedTypes: [
+      "hotel",
+      "resort_hotel",
+      "motel",
+      "inn",
+      "guest_house",
+      "cottage",
+      "bed_and_breakfast",
+      "private_guest_room",
+      "lodging",
+    ],
   },
   boutique: {
     quickQueries: ["boutiques"],

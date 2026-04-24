@@ -197,7 +197,7 @@ export default function App() {
                   setLastFilters(
                     (prev) =>
                       prev ?? {
-                        sector: "restaurant",
+                        sector: "restaurants_tavernas",
                         location: `imported: ${names.slice(0, 3).join(", ")}${names.length > 3 ? "…" : ""}`,
                         noWebsiteOnly: false,
                         minRating: 0,
@@ -271,10 +271,11 @@ export default function App() {
               unticking <strong>Only without a website</strong>, or broadening the location
               (e.g. <em>Sifnos</em> instead of <em>Apollonia</em>).
             </p>
-            {(lastFilters.sector === "villa" || lastFilters.sector === "boat_rental") && (
+            {(lastFilters.sector === "accommodations" || lastFilters.sector === "boat_rental") && (
               <p style={{ marginTop: 10, fontSize: 12, color: "var(--warn)" }}>
-                Note: {lastFilters.sector === "villa" ? "villas" : "boat rentals"} on Greek islands are
-                mostly listed on Airbnb / Booking / VRBO, not Google Places. Coverage is limited.
+                Note: {lastFilters.sector === "accommodations" ? "villas and apartments" : "boat rentals"} on Greek
+                islands are often listed on Airbnb / Booking / VRBO rather than Google Places. Hotels are
+                well-covered; independent rentals less so.
               </p>
             )}
           </div>
