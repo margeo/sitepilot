@@ -13,10 +13,10 @@ interface Props {
   onSearch: (filters: SearchFilters) => void;
   loading: boolean;
   demoMode: boolean;
-  designModel: DesignModelId;
-  onDesignModelChange: (id: DesignModelId) => void;
-  researchModel: DesignModelId;
-  onResearchModelChange: (id: DesignModelId) => void;
+  designModel: DesignModelId | undefined;
+  onDesignModelChange: (id: DesignModelId | undefined) => void;
+  researchModel: DesignModelId | undefined;
+  onResearchModelChange: (id: DesignModelId | undefined) => void;
 }
 
 function validateLocation(loc: string): { ok: boolean; hint?: string } {
@@ -35,8 +35,12 @@ export function SearchForm({
   researchModel,
   onResearchModelChange,
 }: Props) {
-  const designModelHint = DESIGN_MODELS.find((m) => m.value === designModel)?.hint;
-  const researchModelHint = DESIGN_MODELS.find((m) => m.value === researchModel)?.hint;
+  const designModelHint = designModel
+    ? DESIGN_MODELS.find((m) => m.value === designModel)?.hint
+    : undefined;
+  const researchModelHint = researchModel
+    ? DESIGN_MODELS.find((m) => m.value === researchModel)?.hint
+    : undefined;
   const [sector, setSector] = useState<Sector>("restaurant");
   const [location, setLocation] = useState("Paros, Greece");
   const [noWebsiteOnly, setNoWebsiteOnly] = useState(true);
@@ -307,10 +311,14 @@ export function SearchForm({
         <label htmlFor="researchModel">Research model (web-grounded dossier)</label>
         <select
           id="researchModel"
-          value={researchModel}
-          onChange={(e) => onResearchModelChange(e.target.value as DesignModelId)}
+          value={researchModel ?? ""}
+          onChange={(e) =>
+            onResearchModelChange((e.target.value || undefined) as DesignModelId | undefined)
+          }
           style={{ width: "100%" }}
+          required
         >
+          <option value="">— Select a research model —</option>
           {DESIGN_MODELS.map((m) => (
             <option key={m.value} value={m.value}>
               {m.label}
@@ -319,8 +327,9 @@ export function SearchForm({
         </select>
         {researchModelHint && (
           <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 4 }}>
-            {researchModelHint} · OpenRouter options re-routed to direct API so
-            web-search tools work.
+            {researchModelHint} · OpenRouter paths use the <code>:online</code> plugin
+            (Exa web search); Anthropic-direct paths use <code>web_search_20250305</code>;
+            Gemini-direct paths use <code>google_search</code>.
           </div>
         )}
       </div>
@@ -329,10 +338,14 @@ export function SearchForm({
         <label htmlFor="designModel">Design model (for site generation)</label>
         <select
           id="designModel"
-          value={designModel}
-          onChange={(e) => onDesignModelChange(e.target.value as DesignModelId)}
+          value={designModel ?? ""}
+          onChange={(e) =>
+            onDesignModelChange((e.target.value || undefined) as DesignModelId | undefined)
+          }
           style={{ width: "100%" }}
+          required
         >
+          <option value="">— Select a design model —</option>
           {DESIGN_MODELS.map((m) => (
             <option key={m.value} value={m.value}>
               {m.label}

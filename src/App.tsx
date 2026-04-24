@@ -14,20 +14,22 @@ import type {
   SearchFilters,
 } from "./types";
 
-const DEFAULT_MODEL: DesignModelId = "openrouter:google/gemini-3.1-flash-lite-preview";
 const LS_MODEL_KEY = "sitepilot.designModel.v1";
 const LS_RESEARCH_MODEL_KEY = "sitepilot.researchModel.v1";
 
-function loadModel(): DesignModelId {
-  if (typeof window === "undefined") return DEFAULT_MODEL;
+// No default — user must explicitly pick both models before Generate is enabled.
+// If a previous selection is in localStorage we surface it (convenience), but
+// a fresh user sees empty dropdowns.
+function loadModel(): DesignModelId | undefined {
+  if (typeof window === "undefined") return undefined;
   const saved = window.localStorage.getItem(LS_MODEL_KEY);
-  return (saved as DesignModelId) || DEFAULT_MODEL;
+  return saved ? (saved as DesignModelId) : undefined;
 }
 
-function loadResearchModel(): DesignModelId {
-  if (typeof window === "undefined") return DEFAULT_MODEL;
+function loadResearchModel(): DesignModelId | undefined {
+  if (typeof window === "undefined") return undefined;
   const saved = window.localStorage.getItem(LS_RESEARCH_MODEL_KEY);
-  return (saved as DesignModelId) || DEFAULT_MODEL;
+  return saved ? (saved as DesignModelId) : undefined;
 }
 
 export default function App() {
@@ -39,19 +41,23 @@ export default function App() {
   const [searchRev, setSearchRev] = useState(0); // bumps on each successful search -> triggers flash
   const [totalFound, setTotalFound] = useState<number | undefined>();
 
-  const [designModel, setDesignModelState] = useState<DesignModelId>(loadModel);
-  function setDesignModel(id: DesignModelId) {
+  const [designModel, setDesignModelState] = useState<DesignModelId | undefined>(loadModel);
+  function setDesignModel(id: DesignModelId | undefined) {
     setDesignModelState(id);
     try {
-      window.localStorage.setItem(LS_MODEL_KEY, id);
+      if (id) window.localStorage.setItem(LS_MODEL_KEY, id);
+      else window.localStorage.removeItem(LS_MODEL_KEY);
     } catch {}
   }
 
-  const [researchModel, setResearchModelState] = useState<DesignModelId>(loadResearchModel);
-  function setResearchModel(id: DesignModelId) {
+  const [researchModel, setResearchModelState] = useState<DesignModelId | undefined>(
+    loadResearchModel,
+  );
+  function setResearchModel(id: DesignModelId | undefined) {
     setResearchModelState(id);
     try {
-      window.localStorage.setItem(LS_RESEARCH_MODEL_KEY, id);
+      if (id) window.localStorage.setItem(LS_RESEARCH_MODEL_KEY, id);
+      else window.localStorage.removeItem(LS_RESEARCH_MODEL_KEY);
     } catch {}
   }
 
@@ -98,6 +104,12 @@ export default function App() {
   }
 
   async function buildSite(b: BusinessBasic) {
+    if (!researchModel || !designModel) {
+      setError(
+        "Pick both a research model and a design model from the sidebar before generating.",
+      );
+      return;
+    }
     setBusyId(b.place_id);
     setError(null);
     setGenerationStatus("pending");

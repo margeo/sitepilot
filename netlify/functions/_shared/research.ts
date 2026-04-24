@@ -1,46 +1,17 @@
 // Brand research phase: produces a grounded dossier from the business's
-// public web presence. Default path = Gemini + google_search tool (direct
-// API). When `researchModelId` is supplied, we route to the matching
-// provider-direct API so web-search capability is preserved.
+// public web presence. Three paths, all of which preserve web-search:
+//
+//   openrouter:google/<model>     → OpenRouter with :online suffix (Exa web search)
+//   openrouter:anthropic/<model>  → OpenRouter with :online suffix (Exa web search)
+//   anthropic:<model>             → Anthropic direct with web_search_20250305 tool
+//
+// Default (no researchModelId passed) uses Gemini 2.5 Flash direct + google_search.
 
 import Anthropic from "@anthropic-ai/sdk";
 import type { Dossier } from "./dossier";
 import { callGemini, hasGemini } from "./gemini";
 
 export { hasGemini };
-
-// Map a dropdown modelId ("provider:model") to the provider-direct call
-// needed for research. OpenRouter can't pass Gemini's `google_search` or
-// Anthropic's `web_search_20260209` tools through its generic chat API,
-// so OpenRouter options reroute to the corresponding direct provider.
-function resolveResearchRoute(modelId: string): {
-  provider: "gemini" | "anthropic";
-  directModel: string;
-} {
-  const colon = modelId.indexOf(":");
-  const provider = modelId.slice(0, colon);
-  const model = modelId.slice(colon + 1);
-
-  if (provider === "anthropic") {
-    // anthropic:claude-opus-4-7 — already direct.
-    return { provider: "anthropic", directModel: model };
-  }
-  if (provider === "openrouter") {
-    if (model.startsWith("google/")) {
-      // openrouter:google/gemini-3.1-flash-lite-preview
-      // → direct Gemini model: gemini-3.1-flash-lite-preview
-      return { provider: "gemini", directModel: model.replace(/^google\//, "") };
-    }
-    if (model.startsWith("anthropic/")) {
-      // openrouter:anthropic/claude-opus-4.7
-      // → direct Anthropic model: claude-opus-4-7 (dot -> dash)
-      const direct = model.replace(/^anthropic\//, "").replace(/\./g, "-");
-      return { provider: "anthropic", directModel: direct };
-    }
-  }
-  // Fallback: use Gemini 2.5 Flash direct (stable research baseline).
-  return { provider: "gemini", directModel: "gemini-2.5-flash" };
-}
 
 export interface ResearchBusiness {
   name: string;
@@ -129,7 +100,9 @@ function extractJson(text: string): string | null {
   return obj ? obj[0] : null;
 }
 
-async function researchViaGemini(
+// ---- Gemini direct (default path) ---------------------------------------
+
+async function researchViaGeminiDirect(
   business: ResearchBusiness,
   model: string,
 ): Promise<{ dossier: Dossier; model: string }> {
@@ -144,15 +117,8 @@ async function researchViaGemini(
 
   const jsonStr = extractJson(result.text);
   if (!jsonStr) throw new Error(`Research: Gemini returned no JSON. Raw: ${result.text.slice(0, 400)}`);
+  const dossier = JSON.parse(jsonStr) as Dossier;
 
-  let dossier: Dossier;
-  try {
-    dossier = JSON.parse(jsonStr) as Dossier;
-  } catch (parseErr) {
-    throw new Error(
-      `Research: failed to parse dossier JSON: ${parseErr instanceof Error ? parseErr.message : parseErr}`,
-    );
-  }
   if (!dossier.sources?.length && result.groundingSources.length > 0) {
     dossier.sources = result.groundingSources
       .filter((s) => s.uri)
@@ -160,6 +126,64 @@ async function researchViaGemini(
   }
   return { dossier, model: result.model };
 }
+
+// ---- OpenRouter with :online suffix (OpenRouter's Exa-backed web search) -
+
+async function researchViaOpenRouter(
+  business: ResearchBusiness,
+  openrouterSlug: string, // e.g. "google/gemini-3.1-flash-lite-preview"
+): Promise<{ dossier: Dossier; model: string }> {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) throw new Error("OPENROUTER_API_KEY not set");
+  const model = `${openrouterSlug}:online`;
+  const res = await fetch("https://openrouter.ai/api/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${key}`,
+      "HTTP-Referer": "https://sitepilot-app.netlify.app",
+      "X-Title": "SitePilot",
+    },
+    body: JSON.stringify({
+      model,
+      messages: [
+        { role: "system", content: SYSTEM_PROMPT },
+        { role: "user", content: buildUserPrompt(business) },
+      ],
+      max_tokens: 2400,
+    }),
+  });
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`Research (OpenRouter :online) ${res.status}: ${errText.slice(0, 300)}`);
+  }
+  const data = (await res.json()) as {
+    choices?: Array<{
+      message?: {
+        content?: string;
+        annotations?: Array<{ type?: string; url_citation?: { url?: string; title?: string } }>;
+      };
+    }>;
+  };
+  const text = data.choices?.[0]?.message?.content ?? "";
+  if (!text) throw new Error("Research (OpenRouter :online) returned empty content");
+  const jsonStr = extractJson(text);
+  if (!jsonStr) throw new Error(`Research (OpenRouter :online): no JSON. Raw: ${text.slice(0, 400)}`);
+  const dossier = JSON.parse(jsonStr) as Dossier;
+
+  // OpenRouter returns URL citations via the `annotations` array on the
+  // message. Collect them as dossier.sources when the model didn't fill it in.
+  if (!dossier.sources?.length) {
+    const ann = data.choices?.[0]?.message?.annotations ?? [];
+    const sources = ann
+      .filter((a) => a.type === "url_citation" && a.url_citation?.url)
+      .map((a) => ({ title: a.url_citation?.title, uri: a.url_citation?.url }));
+    if (sources.length) dossier.sources = sources;
+  }
+  return { dossier, model };
+}
+
+// ---- Anthropic direct with web_search tool -------------------------------
 
 async function researchViaAnthropic(
   business: ResearchBusiness,
@@ -169,8 +193,6 @@ async function researchViaAnthropic(
   if (!key) throw new Error("ANTHROPIC_API_KEY not set — required for Claude research path");
   const client = new Anthropic({ apiKey: key });
 
-  // Claude's web_search tool lets the model issue live web queries during
-  // the turn. Results come back in citation-annotated content blocks.
   const body = {
     model,
     max_tokens: 3000,
@@ -183,7 +205,6 @@ async function researchViaAnthropic(
     content: Array<{ type: string; text?: string; citations?: Array<{ url?: string; title?: string }> }>;
   };
 
-  // Concatenate text blocks, collect citations as grounding sources.
   const text = msg.content
     .filter((c) => c.type === "text")
     .map((c) => c.text ?? "")
@@ -194,35 +215,33 @@ async function researchViaAnthropic(
       if (cit.url) citations.push({ title: cit.title, uri: cit.url });
     }
   }
-
   const jsonStr = extractJson(text);
-  if (!jsonStr) throw new Error(`Research: Claude returned no JSON. Raw: ${text.slice(0, 400)}`);
-
-  let dossier: Dossier;
-  try {
-    dossier = JSON.parse(jsonStr) as Dossier;
-  } catch (parseErr) {
-    throw new Error(
-      `Research: failed to parse dossier JSON: ${parseErr instanceof Error ? parseErr.message : parseErr}`,
-    );
-  }
-  if (!dossier.sources?.length && citations.length > 0) {
-    dossier.sources = citations;
-  }
+  if (!jsonStr) throw new Error(`Research (Anthropic): no JSON. Raw: ${text.slice(0, 400)}`);
+  const dossier = JSON.parse(jsonStr) as Dossier;
+  if (!dossier.sources?.length && citations.length > 0) dossier.sources = citations;
   return { dossier, model };
 }
+
+// ---- Public entrypoint ---------------------------------------------------
 
 export async function researchBusiness(
   business: ResearchBusiness,
   researchModelId?: string,
 ): Promise<{ dossier: Dossier; model: string }> {
-  // Default to Gemini 2.5 Flash direct (the stable baseline).
   if (!researchModelId) {
-    return researchViaGemini(business, "gemini-2.5-flash");
+    return researchViaGeminiDirect(business, "gemini-2.5-flash");
   }
-  const route = resolveResearchRoute(researchModelId);
-  if (route.provider === "gemini") {
-    return researchViaGemini(business, route.directModel);
+
+  const colon = researchModelId.indexOf(":");
+  const provider = researchModelId.slice(0, colon);
+  const model = researchModelId.slice(colon + 1);
+
+  if (provider === "openrouter") {
+    return researchViaOpenRouter(business, model);
   }
-  return researchViaAnthropic(business, route.directModel);
+  if (provider === "anthropic") {
+    return researchViaAnthropic(business, model);
+  }
+  // Unknown prefix — fall back to Gemini direct baseline.
+  return researchViaGeminiDirect(business, "gemini-2.5-flash");
 }

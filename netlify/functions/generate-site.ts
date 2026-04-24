@@ -7,7 +7,8 @@ import type { Handler } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 import { randomUUID } from "crypto";
 
-const DEFAULT_MODEL = "openrouter:google/gemini-3.1-flash-lite-preview";
+// No default — the caller must explicitly pick both a design and a research
+// model from the frontend. Missing or unknown ids return 400.
 const ALLOWED_MODELS = new Set([
   "openrouter:google/gemini-3.1-flash-lite-preview",
   "openrouter:google/gemini-3.1-pro-preview",
@@ -48,11 +49,16 @@ export const handler: Handler = async (event) => {
   const business = body.business;
   if (!business?.name) return jsonRes(400, { error: "business.name required" });
 
-  const modelId = body.modelId && ALLOWED_MODELS.has(body.modelId) ? body.modelId : DEFAULT_MODEL;
-  const researchModelId =
-    body.researchModelId && ALLOWED_MODELS.has(body.researchModelId)
-      ? body.researchModelId
-      : DEFAULT_MODEL;
+  if (!body.modelId || !ALLOWED_MODELS.has(body.modelId)) {
+    return jsonRes(400, { error: "Valid modelId is required (pick a design model in the UI)" });
+  }
+  if (!body.researchModelId || !ALLOWED_MODELS.has(body.researchModelId)) {
+    return jsonRes(400, {
+      error: "Valid researchModelId is required (pick a research model in the UI)",
+    });
+  }
+  const modelId = body.modelId;
+  const researchModelId = body.researchModelId;
   const jobId = randomUUID();
   const now = Date.now();
 
