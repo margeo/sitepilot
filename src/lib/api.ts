@@ -46,3 +46,14 @@ export function generateSite(business: BusinessDetails): Promise<GenerateRespons
 export function photoUrl(ref: string, maxwidth = 1200): string {
   return `${BASE}/photos?reference=${encodeURIComponent(ref)}&maxwidth=${maxwidth}`;
 }
+
+export interface LocationSuggestion {
+  placeId: string;
+  description: string;
+  mainText: string;
+  secondaryText?: string;
+}
+
+export function autocompleteLocation(input: string): Promise<{ suggestions: LocationSuggestion[] }> {
+  return post<{ suggestions: LocationSuggestion[] }>("autocomplete-location", { input });
+}

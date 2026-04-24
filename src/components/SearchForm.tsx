@@ -1,5 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { SECTORS, type SearchFilters, type Sector } from "../types";
+import { autocompleteLocation, type LocationSuggestion } from "../lib/api";
 
 interface Props {
   onSearch: (filters: SearchFilters) => void;
@@ -22,11 +23,82 @@ export function SearchForm({ onSearch, loading, demoMode }: Props) {
   const [minReviews, setMinReviews] = useState(10);
   const [maxResults, setMaxResults] = useState(20);
 
+  const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
+  const [showDropdown, setShowDropdown] = useState(false);
+  const [activeIndex, setActiveIndex] = useState(-1);
+  const suppressNextFetchRef = useRef(false);
+  const debounceRef = useRef<number | null>(null);
+  const wrapperRef = useRef<HTMLDivElement>(null);
+
   const locationCheck = validateLocation(location);
+
+  useEffect(() => {
+    if (demoMode) {
+      setSuggestions([]);
+      return;
+    }
+    if (suppressNextFetchRef.current) {
+      suppressNextFetchRef.current = false;
+      return;
+    }
+    const input = location.trim();
+    if (input.length < 2) {
+      setSuggestions([]);
+      return;
+    }
+    if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    debounceRef.current = window.setTimeout(async () => {
+      try {
+        const res = await autocompleteLocation(input);
+        setSuggestions(res.suggestions);
+        setActiveIndex(-1);
+      } catch {
+        setSuggestions([]);
+      }
+    }, 220);
+    return () => {
+      if (debounceRef.current) window.clearTimeout(debounceRef.current);
+    };
+  }, [location, demoMode]);
+
+  useEffect(() => {
+    function onClickOutside(e: MouseEvent) {
+      if (wrapperRef.current && !wrapperRef.current.contains(e.target as Node)) {
+        setShowDropdown(false);
+      }
+    }
+    document.addEventListener("mousedown", onClickOutside);
+    return () => document.removeEventListener("mousedown", onClickOutside);
+  }, []);
+
+  function pickSuggestion(s: LocationSuggestion) {
+    suppressNextFetchRef.current = true;
+    setLocation(s.description);
+    setShowDropdown(false);
+    setSuggestions([]);
+    setActiveIndex(-1);
+  }
+
+  function onKeyDown(e: React.KeyboardEvent<HTMLInputElement>) {
+    if (!showDropdown || suggestions.length === 0) return;
+    if (e.key === "ArrowDown") {
+      e.preventDefault();
+      setActiveIndex((i) => (i + 1) % suggestions.length);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      setActiveIndex((i) => (i <= 0 ? suggestions.length - 1 : i - 1));
+    } else if (e.key === "Enter" && activeIndex >= 0) {
+      e.preventDefault();
+      pickSuggestion(suggestions[activeIndex]);
+    } else if (e.key === "Escape") {
+      setShowDropdown(false);
+    }
+  }
 
   function submit(e: React.FormEvent) {
     e.preventDefault();
     if (!locationCheck.ok) return;
+    setShowDropdown(false);
     onSearch({ sector, location: location.trim(), noWebsiteOnly, minRating, minReviews, maxResults });
   }
 
@@ -48,12 +120,17 @@ export function SearchForm({ onSearch, loading, demoMode }: Props) {
         </select>
       </div>
 
-      <div>
+      <div ref={wrapperRef} style={{ position: "relative" }}>
         <label htmlFor="location">Location</label>
         <input
           id="location"
           value={location}
-          onChange={(e) => setLocation(e.target.value)}
+          onChange={(e) => {
+            setLocation(e.target.value);
+            setShowDropdown(true);
+          }}
+          onFocus={() => setShowDropdown(true)}
+          onKeyDown={onKeyDown}
           placeholder="e.g. Paros, Greece · Santorini · Mykonos town"
           style={{
             width: "100%",
@@ -62,6 +139,50 @@ export function SearchForm({ onSearch, loading, demoMode }: Props) {
           autoComplete="off"
           spellCheck={false}
         />
+        {showDropdown && suggestions.length > 0 && (
+          <ul
+            style={{
+              position: "absolute",
+              top: "100%",
+              left: 0,
+              right: 0,
+              marginTop: 4,
+              listStyle: "none",
+              padding: 4,
+              background: "var(--bg-elev, #1a1a1a)",
+              border: "1px solid var(--border, #333)",
+              borderRadius: 6,
+              maxHeight: 280,
+              overflowY: "auto",
+              zIndex: 20,
+              boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+            }}
+          >
+            {suggestions.map((s, idx) => (
+              <li
+                key={s.placeId}
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  pickSuggestion(s);
+                }}
+                onMouseEnter={() => setActiveIndex(idx)}
+                style={{
+                  padding: "8px 10px",
+                  cursor: "pointer",
+                  borderRadius: 4,
+                  background: idx === activeIndex ? "var(--bg-hover, #2a2a2a)" : "transparent",
+                }}
+              >
+                <div style={{ fontSize: 14 }}>{s.mainText}</div>
+                {s.secondaryText && (
+                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                    {s.secondaryText}
+                  </div>
+                )}
+              </li>
+            ))}
+          </ul>
+        )}
         {!locationCheck.ok && (
           <div style={{ color: "var(--danger)", fontSize: 11, marginTop: 4 }}>
             {locationCheck.hint}
