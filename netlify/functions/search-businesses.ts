@@ -23,17 +23,25 @@ interface Basic {
   website_uri?: string;
 }
 
-const SECTOR_QUERY: Record<Sector, string> = {
-  restaurant: "restaurant",
-  tavern: "taverna traditional restaurant",
-  beach_bar: "beach bar",
-  villa: "villas apartments studios rooms",
-  hotel: "hotel",
-  boutique: "boutique shop",
-  car_rental: "car rental",
-  boat_rental: "boat rental yacht charter",
-  beauty_wellness: "beauty salon spa",
-  local_services: "local services",
+interface SectorConfig {
+  textQuery: string;
+  includedType: string;
+}
+
+// textQuery = human-readable search phrase (Google also uses it as semantic context)
+// includedType = exact Google primary place type (Table A). strictTypeFiltering
+// ensures Google only returns places whose primary type matches.
+const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
+  restaurant: { textQuery: "restaurants", includedType: "restaurant" },
+  tavern: { textQuery: "Greek tavernas", includedType: "greek_restaurant" },
+  beach_bar: { textQuery: "beach bars", includedType: "bar" },
+  villa: { textQuery: "guest houses", includedType: "guest_house" },
+  hotel: { textQuery: "hotels", includedType: "hotel" },
+  boutique: { textQuery: "boutiques", includedType: "clothing_store" },
+  car_rental: { textQuery: "car rentals", includedType: "car_rental" },
+  boat_rental: { textQuery: "boat tour agencies", includedType: "tour_agency" },
+  beauty_wellness: { textQuery: "beauty salons", includedType: "beauty_salon" },
+  local_services: { textQuery: "local services", includedType: "store" },
 };
 
 function jsonRes(statusCode: number, body: unknown) {
@@ -44,7 +52,11 @@ function jsonRes(statusCode: number, body: unknown) {
   };
 }
 
-async function placesTextSearch(query: string, apiKey: string): Promise<Basic[]> {
+async function placesTextSearch(
+  query: string,
+  includedType: string,
+  apiKey: string,
+): Promise<Basic[]> {
   const url = "https://places.googleapis.com/v1/places:searchText";
   const res = await fetch(url, {
     method: "POST",
@@ -54,7 +66,12 @@ async function placesTextSearch(query: string, apiKey: string): Promise<Basic[]>
       "X-Goog-FieldMask":
         "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types,places.websiteUri,places.businessStatus",
     },
-    body: JSON.stringify({ textQuery: query, pageSize: 20 }),
+    body: JSON.stringify({
+      textQuery: query,
+      includedType,
+      strictTypeFiltering: true,
+      pageSize: 20,
+    }),
   });
   if (!res.ok) {
     const errText = await res.text();
@@ -125,8 +142,9 @@ export const handler: Handler = async (event) => {
   }
 
   try {
-    const query = `${SECTOR_QUERY[sector]} in ${location}`;
-    const raw = await placesTextSearch(query, apiKey);
+    const cfg = SECTOR_CONFIG[sector];
+    const query = `${cfg.textQuery} in ${location}`;
+    const raw = await placesTextSearch(query, cfg.includedType, apiKey);
     const totalFound = raw.length;
     let results = raw;
     if (noWebsiteOnly) results = results.filter((r) => !r.has_website);
