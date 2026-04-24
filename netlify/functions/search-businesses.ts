@@ -27,7 +27,7 @@ const SECTOR_QUERY: Record<Sector, string> = {
   restaurant: "restaurant",
   tavern: "taverna traditional restaurant",
   beach_bar: "beach bar",
-  villa: "villa rental",
+  villa: "villas apartments studios rooms",
   hotel: "hotel",
   boutique: "boutique shop",
   car_rental: "car rental",

@@ -150,6 +150,12 @@ export default function App() {
               unticking <strong>Only without a website</strong>, or broadening the location
               (e.g. <em>Sifnos</em> instead of <em>Apollonia</em>).
             </p>
+            {(lastFilters.sector === "villa" || lastFilters.sector === "boat_rental") && (
+              <p style={{ marginTop: 10, fontSize: 12, color: "var(--warn)" }}>
+                Note: {lastFilters.sector === "villa" ? "villas" : "boat rentals"} on Greek islands are
+                mostly listed on Airbnb / Booking / VRBO, not Google Places. Coverage is limited.
+              </p>
+            )}
           </div>
         )}
 
