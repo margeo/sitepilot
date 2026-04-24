@@ -18,6 +18,9 @@
 [functions."research-business"]
   timeout = 26
 
+[functions."search-businesses"]
+  timeout = 26
+
 [dev]
   command = "npm run dev:vite"
   port = 8888

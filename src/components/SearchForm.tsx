@@ -1,5 +1,12 @@
 import { useEffect, useRef, useState } from "react";
-import { DESIGN_MODELS, SECTORS, type DesignModelId, type SearchFilters, type Sector } from "../types";
+import {
+  DESIGN_MODELS,
+  SECTORS,
+  type DesignModelId,
+  type SearchDepth,
+  type SearchFilters,
+  type Sector,
+} from "../types";
 import { autocompleteLocation, type LocationSuggestion } from "../lib/api";
 
 interface Props {
@@ -25,6 +32,7 @@ export function SearchForm({ onSearch, loading, demoMode, designModel, onDesignM
   const [minRating, setMinRating] = useState(4.0);
   const [minReviews, setMinReviews] = useState(10);
   const [maxResults, setMaxResults] = useState(20);
+  const [searchDepth, setSearchDepth] = useState<SearchDepth>("quick");
 
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -102,7 +110,15 @@ export function SearchForm({ onSearch, loading, demoMode, designModel, onDesignM
     e.preventDefault();
     if (!locationCheck.ok) return;
     setShowDropdown(false);
-    onSearch({ sector, location: location.trim(), noWebsiteOnly, minRating, minReviews, maxResults });
+    onSearch({
+      sector,
+      location: location.trim(),
+      noWebsiteOnly,
+      minRating,
+      minReviews,
+      maxResults,
+      searchDepth,
+    });
   }
 
   return (
@@ -249,11 +265,30 @@ export function SearchForm({ onSearch, loading, demoMode, designModel, onDesignM
             id="maxResults"
             type="number"
             min={1}
-            max={60}
+            max={200}
             value={maxResults}
             onChange={(e) => setMaxResults(Number(e.target.value))}
             style={{ width: "100%" }}
           />
+        </div>
+
+        <div style={{ marginTop: 10 }}>
+          <label htmlFor="searchDepth">Search depth</label>
+          <select
+            id="searchDepth"
+            value={searchDepth}
+            onChange={(e) => setSearchDepth(e.target.value as SearchDepth)}
+            style={{ width: "100%" }}
+          >
+            <option value="quick">Quick — 1 query, ~2s, ~10–20 results</option>
+            <option value="deep">Deep — 5–9 queries paginated, ~15–25s, ~60–200 results</option>
+          </select>
+          {searchDepth === "deep" && (
+            <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 4 }}>
+              Broader phrasings, no primary-type filter — catches villas listed as
+              <code> lodging</code>, tavernas listed as <code>restaurant</code>, etc.
+            </div>
+          )}
         </div>
       </div>
 

@@ -174,6 +174,7 @@ export default function App() {
                         minRating: 0,
                         minReviews: 0,
                         maxResults: 60,
+                        searchDepth: "quick",
                       },
                   );
                   setSearchRev((n) => n + 1);
