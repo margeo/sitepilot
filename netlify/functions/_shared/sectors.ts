@@ -1,6 +1,6 @@
 export type Sector =
   | "restaurants_tavernas"
-  | "beach_bar"
+  | "cafes_bars_pubs"
   | "accommodations"
   | "boutique"
   | "car_rental"
@@ -45,15 +45,18 @@ export const SECTOR_THEMES: Record<Sector, SectorTheme> = {
     suggestedPages: ["Home", "Menu", "Gallery", "Visit & Contact"],
     hasMenu: true, hasRooms: false, hasGallery: true,
   },
-  beach_bar: {
-    label: "Beach Bar",
+  cafes_bars_pubs: {
+    label: "Cafes, Bars & Pubs",
     primary: "#0a6b8a", primaryDark: "#064358", accent: "#f2b83a",
     bgTint: "#eaf6fa", heroOverlay: "rgba(5,30,45,0.45)",
     servicesLabel: "Drinks & Bites", servicesSingular: "item",
-    tagline: "Sun, sea, and sunset cocktails.",
+    tagline: "From morning espresso to sunset cocktails.",
     aboutHeading: "The vibe",
-    ctaReserve: "Book a sunbed",
-    keywords: ["beach bar", "cocktails", "sunbeds", "sunset", "beach club"],
+    ctaReserve: "Book a table",
+    keywords: [
+      "cafe", "coffee", "espresso", "bar", "cocktail bar", "wine bar",
+      "pub", "beach bar", "sunset", "drinks", "aperitivo",
+    ],
     suggestedPages: ["Home", "Drinks", "Gallery", "Visit & Contact"],
     hasMenu: true, hasRooms: false, hasGallery: true,
   },
@@ -137,14 +140,22 @@ export const SECTOR_THEMES: Record<Sector, SectorTheme> = {
 export function sectorFromGoogleTypes(types: string[] | undefined, hint?: Sector): Sector {
   const t = (types ?? []).map((x) => x.toLowerCase());
   if (hint) return hint;
-  if (t.includes("lodging") || t.includes("hotel") || t.includes("guest_house") || t.includes("bed_and_breakfast")) {
+  if (
+    t.includes("lodging") ||
+    t.includes("hotel") ||
+    t.includes("guest_house") ||
+    t.includes("bed_and_breakfast")
+  ) {
     return "accommodations";
   }
-  if (t.includes("bar") || t.includes("night_club")) return "beach_bar";
+  if (t.includes("bar") || t.includes("pub") || t.includes("wine_bar") || t.includes("night_club")) {
+    return "cafes_bars_pubs";
+  }
+  if (t.includes("cafe") || t.includes("coffee_shop")) return "cafes_bars_pubs";
   if (t.includes("car_rental")) return "car_rental";
   if (t.includes("beauty_salon") || t.includes("hair_care") || t.includes("spa")) return "beauty_wellness";
   if (t.includes("clothing_store") || t.includes("shoe_store") || t.includes("jewelry_store")) return "boutique";
-  if (t.includes("restaurant") || t.includes("food") || t.includes("cafe") || t.includes("greek_restaurant")) {
+  if (t.includes("restaurant") || t.includes("food") || t.includes("greek_restaurant")) {
     return "restaurants_tavernas";
   }
   return "local_services";

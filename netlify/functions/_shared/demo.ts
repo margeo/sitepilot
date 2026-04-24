@@ -66,14 +66,14 @@ export const DEMO_DATA: Record<Sector, DemoBusiness[]> = {
       photo_refs: [],
     },
   ],
-  beach_bar: [
+  cafes_bars_pubs: [
     {
       place_id: "demo_bb_1",
       name: "Kalo Livadi Beach Club",
       address: "Kalo Livadi Beach, Mykonos",
       formatted_address: "Kalo Livadi Beach, Mykonos 84600, Greece",
       rating: 4.5, user_ratings_total: 512, types: ["bar"],
-      has_website: false, sector_hint: "beach_bar",
+      has_website: false, sector_hint: "cafes_bars_pubs",
       phone_numbers: ["+30 6945 112 233"],
       opening_hours: ["Daily: 10:00–22:00", "Seasonal: May–September"],
       reviews: [

@@ -47,8 +47,6 @@ const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
       "eateries",
       "fine dining",
       "family restaurants",
-      "cafes",
-      "coffee shops",
       "bakeries",
       "fast food",
       "pizzerias",
@@ -62,26 +60,30 @@ const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
       "italian_restaurant",
       "pizza_restaurant",
       "fast_food_restaurant",
-      "cafe",
-      "coffee_shop",
       "breakfast_restaurant",
       "brunch_restaurant",
       "sandwich_shop",
       "bakery",
-      "pub",
     ],
   },
-  beach_bar: {
-    quickQueries: ["beach bars"],
+  cafes_bars_pubs: {
+    quickQueries: ["cafes bars and pubs"],
     deepQueries: [
+      "cafes",
+      "coffee shops",
+      "espresso bars",
+      "brunch cafes",
+      "bars",
+      "cocktail bars",
+      "wine bars",
+      "pubs",
+      "gastropubs",
       "beach bars",
       "seaside bars",
-      "beachfront cafes",
       "sunset bars",
-      "beach restaurants",
       "beach clubs",
     ],
-    includedTypes: ["bar"],
+    includedTypes: ["cafe", "coffee_shop", "bar", "pub", "wine_bar"],
   },
   accommodations: {
     quickQueries: ["hotels villas apartments and vacation rentals"],
@@ -333,6 +335,11 @@ export const handler: Handler = async (event) => {
       const byId = new Map<string, Basic>();
       for (const list of batches) for (const b of list) byId.set(b.place_id, b);
       raw = Array.from(byId.values());
+      // Post-filter to the sector's primary-type whitelist so broad text
+      // queries ("hotels in Symi") don't bleed other categories in (a
+      // restaurant named "Hotel X", a shop named "Villa Y", etc.).
+      const whitelist = new Set(cfg.includedTypes);
+      raw = raw.filter((r) => (r.types ?? []).some((t) => whitelist.has(t)));
     } else {
       // Quick: single focused phrase, per-type strict filtering, 1 page. Fast.
       const quickQuery = `${cfg.quickQueries[0]} in ${location}`;
