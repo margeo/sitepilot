@@ -1,4 +1,11 @@
-import type { BusinessBasic, BusinessDetails, GeneratedSite, SearchFilters } from "../types";
+import type {
+  BusinessBasic,
+  BusinessDetails,
+  DesignModelId,
+  GeneratedSite,
+  JobRecord,
+  SearchFilters,
+} from "../types";
 
 const BASE = "/.netlify/functions";
 
@@ -8,7 +15,7 @@ async function post<T>(path: string, body: unknown): Promise<T> {
     headers: { "content-type": "application/json" },
     body: JSON.stringify(body),
   });
-  if (!res.ok) {
+  if (!res.ok && res.status !== 202) {
     const text = await res.text();
     throw new Error(`${path} failed (${res.status}): ${text}`);
   }
@@ -35,13 +42,50 @@ export function fetchDetails(place_id: string, basic: BusinessBasic): Promise<De
   return post<DetailsResponse>("place-details", { place_id, basic });
 }
 
-export interface GenerateResponse {
-  site: GeneratedSite;
-  demo: boolean;
+export interface StartGenerateResponse {
+  jobId: string;
+  status: "pending";
+  modelId: DesignModelId;
 }
 
-export function generateSite(business: BusinessDetails): Promise<GenerateResponse> {
-  return post<GenerateResponse>("generate-site", { business });
+export function startGenerate(
+  business: BusinessDetails,
+  modelId: DesignModelId,
+): Promise<StartGenerateResponse> {
+  return post<StartGenerateResponse>("generate-site", { business, modelId });
+}
+
+export async function getJobStatus(jobId: string): Promise<JobRecord> {
+  const res = await fetch(`${BASE}/generate-status?id=${encodeURIComponent(jobId)}`);
+  if (!res.ok) {
+    const text = await res.text();
+    throw new Error(`generate-status failed (${res.status}): ${text}`);
+  }
+  return (await res.json()) as JobRecord;
+}
+
+// Start generation and poll until done (or error / timeout).
+// onTick is called on every poll with the current record.
+export async function generateSite(
+  business: BusinessDetails,
+  modelId: DesignModelId,
+  onTick?: (rec: JobRecord) => void,
+  opts: { intervalMs?: number; timeoutMs?: number } = {},
+): Promise<{ jobId: string; record: JobRecord }> {
+  const interval = opts.intervalMs ?? 2000;
+  const timeout = opts.timeoutMs ?? 5 * 60 * 1000; // 5 min
+  const { jobId } = await startGenerate(business, modelId);
+  const deadline = Date.now() + timeout;
+
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, interval));
+    const record = await getJobStatus(jobId);
+    onTick?.(record);
+    if (record.status === "done" || record.status === "error") {
+      return { jobId, record };
+    }
+  }
+  throw new Error(`Generation timed out after ${Math.round(timeout / 1000)}s`);
 }
 
 export function photoUrl(ref: string, maxwidth = 1200): string {

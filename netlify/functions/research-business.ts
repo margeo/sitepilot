@@ -1,21 +1,9 @@
+// Standalone research endpoint. Thin wrapper over _shared/research.
 import type { Handler } from "@netlify/functions";
-import { callGemini, hasGemini } from "./_shared/gemini";
-import type { Dossier } from "./_shared/dossier";
+import { researchBusiness, hasGemini, type ResearchBusiness } from "./_shared/research";
 
 interface Body {
-  business: {
-    name: string;
-    address?: string;
-    formatted_address?: string;
-    place_id?: string;
-    rating?: number;
-    user_ratings_total?: number;
-    website_uri?: string;
-    editorial_summary?: string;
-    types?: string[];
-    reviews?: Array<{ author?: string; rating?: number; text?: string }>;
-    sector?: string;
-  };
+  business: ResearchBusiness;
 }
 
 function jsonRes(statusCode: number, body: unknown) {
@@ -26,125 +14,22 @@ function jsonRes(statusCode: number, body: unknown) {
   };
 }
 
-const SYSTEM_PROMPT = `You are a brand researcher. Given a business's basic Google Places data,
-research its public web presence (Instagram, Facebook, Tripadvisor, Booking.com, Airbnb, blogs,
-travel guides) to produce a rich brand dossier.
-
-Ground everything in what you actually find. Never invent specific facts (prices, dishes,
-awards, host names) that you cannot verify through your searches. If a field cannot be grounded,
-return null or an empty array for it.
-
-Your final message MUST end with a single fenced JSON block (\`\`\`json ... \`\`\`) containing
-the dossier — nothing after the closing fence.`;
-
-function buildUserPrompt(b: Body["business"]): string {
-  const addr = b.formatted_address || b.address || "";
-  const reviewLines = (b.reviews ?? [])
-    .slice(0, 5)
-    .map((r) => `- ${r.author ?? "Reviewer"} (${r.rating ?? "?"}): ${(r.text ?? "").slice(0, 300)}`)
-    .join("\n");
-
-  return `Business:
-Name: ${b.name}
-Address: ${addr}
-Sector: ${b.sector ?? "unknown"}
-Google rating: ${b.rating ?? "n/a"} (${b.user_ratings_total ?? 0} reviews)
-Has existing website: ${b.website_uri ? `yes (${b.website_uri})` : "no"}
-Editorial summary (from Google): ${b.editorial_summary ?? "(none)"}
-Top reviews:
-${reviewLines || "(none)"}
-
-Research this business on the web. Look for:
-- Instagram / Facebook / Tripadvisor / Booking.com / Airbnb presence (exact handles / URLs)
-- Signature offerings (dishes, rooms, services), founder/host names, story
-- What customers consistently praise (the vibe)
-- Target audience (families, couples, digital nomads, luxury, budget, etc.)
-- Unique facts that would make a website memorable
-
-Produce the dossier as a JSON object with this exact shape (use null / [] when ungrounded):
-{
-  "name": "string",
-  "category_descriptor": "short, specific phrase like 'Family-run seafront studios' or 'Traditional village taverna'",
-  "address": "string",
-  "location_notes": "1-2 sentences about the setting/neighborhood, or null",
-  "season": "summer | winter | year_round | null",
-  "social": {
-    "instagram": "@handle or url, or null",
-    "facebook": "url or null",
-    "tripadvisor": "url or null",
-    "airbnb": "url or null",
-    "booking": "url or null",
-    "website": "url or null"
-  },
-  "brand_identity": {
-    "vibe": "3-6 descriptors joined by '·' (e.g. 'family-run · authentic · slow-travel premium')",
-    "keywords": ["5-10 evocative words"],
-    "target_audience": "1 sentence",
-    "unique_story": "2-3 sentences of real narrative grounded in research"
-  },
-  "signature_elements": ["3-6 concrete standout features — be specific"],
-  "review_highlights": [
-    { "quote": "short verbatim customer quote", "theme": "what it demonstrates (e.g. 'hosts warmth')" }
-  ],
-  "confidence": 0.0
-}
-
-Confidence: 0.9+ if grounded in multiple sources, 0.6-0.8 if limited sources, <0.5 if mostly speculative.
-Return the JSON inside a single \`\`\`json fenced block.`;
-}
-
-function extractJson(text: string): string | null {
-  const fenced = text.match(/```json\s*([\s\S]*?)\s*```/);
-  if (fenced) return fenced[1];
-  const obj = text.match(/\{[\s\S]*\}/);
-  return obj ? obj[0] : null;
-}
-
 export const handler: Handler = async (event) => {
   if (event.httpMethod !== "POST") return jsonRes(405, { error: "POST only" });
   if (!hasGemini()) return jsonRes(500, { error: "GEMINI_API_KEY not set" });
 
   let body: Body;
   try {
-    body = JSON.parse(event.body || "{}");
+    body = JSON.parse(event.body || "{}") as Body;
   } catch {
     return jsonRes(400, { error: "Invalid JSON" });
   }
-  const b = body.business;
-  if (!b?.name) return jsonRes(400, { error: "business.name required" });
+  if (!body.business?.name) return jsonRes(400, { error: "business.name required" });
 
   try {
-    const result = await callGemini({
-      systemInstruction: SYSTEM_PROMPT,
-      prompt: buildUserPrompt(b),
-      enableSearch: true,
-      temperature: 0.4,
-      maxOutputTokens: 2400,
-    });
-
-    const jsonStr = extractJson(result.text);
-    if (!jsonStr) throw new Error(`Gemini returned no JSON block. Raw: ${result.text.slice(0, 400)}`);
-
-    let dossier: Dossier;
-    try {
-      dossier = JSON.parse(jsonStr) as Dossier;
-    } catch (parseErr) {
-      throw new Error(
-        `Failed to parse dossier JSON: ${parseErr instanceof Error ? parseErr.message : parseErr}`,
-      );
-    }
-
-    // Attach grounding sources if not already populated by the model
-    if (!dossier.sources?.length && result.groundingSources.length > 0) {
-      dossier.sources = result.groundingSources
-        .filter((s) => s.uri)
-        .map((s) => ({ title: s.title, uri: s.uri }));
-    }
-
-    return jsonRes(200, { dossier, model: result.model });
+    const { dossier, model } = await researchBusiness(body.business);
+    return jsonRes(200, { dossier, model });
   } catch (err) {
-    return jsonRes(500, {
-      error: err instanceof Error ? err.message : String(err),
-    });
+    return jsonRes(500, { error: err instanceof Error ? err.message : String(err) });
   }
 };

@@ -5,7 +5,23 @@ import { ResultsTable } from "./components/ResultsTable";
 import { SitePreview } from "./components/SitePreview";
 import { ScreenshotImport } from "./components/ScreenshotImport";
 import { fetchDetails, generateSite, searchBusinesses } from "./lib/api";
-import type { BusinessBasic, BusinessDetails, GeneratedSite, SearchFilters } from "./types";
+import type {
+  BusinessBasic,
+  BusinessDetails,
+  DesignModelId,
+  GeneratedSite,
+  JobStatus,
+  SearchFilters,
+} from "./types";
+
+const DEFAULT_MODEL: DesignModelId = "openrouter:google/gemini-3.1-flash-lite-preview";
+const LS_MODEL_KEY = "sitepilot.designModel.v1";
+
+function loadModel(): DesignModelId {
+  if (typeof window === "undefined") return DEFAULT_MODEL;
+  const saved = window.localStorage.getItem(LS_MODEL_KEY);
+  return (saved as DesignModelId) || DEFAULT_MODEL;
+}
 
 export default function App() {
   const [searching, setSearching] = useState(false);
@@ -16,8 +32,18 @@ export default function App() {
   const [searchRev, setSearchRev] = useState(0); // bumps on each successful search -> triggers flash
   const [totalFound, setTotalFound] = useState<number | undefined>();
 
+  const [designModel, setDesignModelState] = useState<DesignModelId>(loadModel);
+  function setDesignModel(id: DesignModelId) {
+    setDesignModelState(id);
+    try {
+      window.localStorage.setItem(LS_MODEL_KEY, id);
+    } catch {}
+  }
+
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [busyId, setBusyId] = useState<string | undefined>();
+  const [generationStatus, setGenerationStatus] = useState<JobStatus | null>(null);
+  const [generationElapsed, setGenerationElapsed] = useState<number>(0);
   const [selectedDetails, setSelectedDetails] = useState<BusinessDetails | null>(null);
   const [selectedSite, setSelectedSite] = useState<GeneratedSite | null>(null);
   const [lastFilters, setLastFilters] = useState<SearchFilters | null>(null);
@@ -59,16 +85,30 @@ export default function App() {
   async function buildSite(b: BusinessBasic) {
     setBusyId(b.place_id);
     setError(null);
+    setGenerationStatus("pending");
+    setGenerationElapsed(0);
+    const t0 = Date.now();
+    const tick = window.setInterval(() => {
+      setGenerationElapsed(Math.round((Date.now() - t0) / 1000));
+    }, 500);
     try {
       const { business } = await fetchDetails(b.place_id, b);
-      const { site } = await generateSite(business);
+      const { record } = await generateSite(business, designModel, (rec) => {
+        setGenerationStatus(rec.status);
+      });
+      if (record.status === "error") {
+        throw new Error(record.error || "Generation failed");
+      }
+      if (!record.site) throw new Error("Generation finished with no site payload");
       setSelectedId(b.place_id);
       setSelectedDetails(business);
-      setSelectedSite(site);
+      setSelectedSite(record.site);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
+      window.clearInterval(tick);
       setBusyId(undefined);
+      setGenerationStatus(null);
     }
   }
 
@@ -92,7 +132,13 @@ export default function App() {
           </div>
         )}
 
-        <SearchForm onSearch={runSearch} loading={searching} demoMode={demoMode} />
+        <SearchForm
+          onSearch={runSearch}
+          loading={searching}
+          demoMode={demoMode}
+          designModel={designModel}
+          onDesignModelChange={setDesignModel}
+        />
 
         {!demoMode && (
           <div style={{ marginTop: 20 }}>
@@ -201,6 +247,20 @@ export default function App() {
                 mostly listed on Airbnb / Booking / VRBO, not Google Places. Coverage is limited.
               </p>
             )}
+          </div>
+        )}
+
+        {busyId && generationStatus && (
+          <div className="banner" style={{ marginBottom: 14, fontSize: 12 }}>
+            <span className="spinner" />
+            <span>
+              {generationStatus === "pending" && "Queueing generation…"}
+              {generationStatus === "researching" && "Researching business on the web…"}
+              {generationStatus === "designing" && "Designing site…"}
+              {generationStatus === "done" && "Done."}
+              {generationStatus === "error" && "Error."}{" "}
+              <span style={{ color: "var(--text-muted)" }}>· {generationElapsed}s</span>
+            </span>
           </div>
         )}
 

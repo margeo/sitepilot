@@ -1,11 +1,13 @@
 import { useEffect, useRef, useState } from "react";
-import { SECTORS, type SearchFilters, type Sector } from "../types";
+import { DESIGN_MODELS, SECTORS, type DesignModelId, type SearchFilters, type Sector } from "../types";
 import { autocompleteLocation, type LocationSuggestion } from "../lib/api";
 
 interface Props {
   onSearch: (filters: SearchFilters) => void;
   loading: boolean;
   demoMode: boolean;
+  designModel: DesignModelId;
+  onDesignModelChange: (id: DesignModelId) => void;
 }
 
 function validateLocation(loc: string): { ok: boolean; hint?: string } {
@@ -15,7 +17,8 @@ function validateLocation(loc: string): { ok: boolean; hint?: string } {
   return { ok: true };
 }
 
-export function SearchForm({ onSearch, loading, demoMode }: Props) {
+export function SearchForm({ onSearch, loading, demoMode, designModel, onDesignModelChange }: Props) {
+  const designModelHint = DESIGN_MODELS.find((m) => m.value === designModel)?.hint;
   const [sector, setSector] = useState<Sector>("restaurant");
   const [location, setLocation] = useState("Paros, Greece");
   const [noWebsiteOnly, setNoWebsiteOnly] = useState(true);
@@ -252,6 +255,27 @@ export function SearchForm({ onSearch, loading, demoMode }: Props) {
             style={{ width: "100%" }}
           />
         </div>
+      </div>
+
+      <div>
+        <label htmlFor="designModel">Design model (for site generation)</label>
+        <select
+          id="designModel"
+          value={designModel}
+          onChange={(e) => onDesignModelChange(e.target.value as DesignModelId)}
+          style={{ width: "100%" }}
+        >
+          {DESIGN_MODELS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+        {designModelHint && (
+          <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 4 }}>
+            {designModelHint}
+          </div>
+        )}
       </div>
 
       <button type="submit" className="btn" disabled={loading || !locationCheck.ok}>
