@@ -25,6 +25,7 @@ interface Body {
     [k: string]: unknown;
   };
   modelId?: string;
+  researchModelId?: string;
 }
 
 function jsonRes(statusCode: number, body: unknown) {
@@ -48,6 +49,10 @@ export const handler: Handler = async (event) => {
   if (!business?.name) return jsonRes(400, { error: "business.name required" });
 
   const modelId = body.modelId && ALLOWED_MODELS.has(body.modelId) ? body.modelId : DEFAULT_MODEL;
+  const researchModelId =
+    body.researchModelId && ALLOWED_MODELS.has(body.researchModelId)
+      ? body.researchModelId
+      : DEFAULT_MODEL;
   const jobId = randomUUID();
   const now = Date.now();
 
@@ -58,6 +63,7 @@ export const handler: Handler = async (event) => {
       createdAt: now,
       updatedAt: now,
       modelId,
+      researchModelId,
       businessName: business.name,
     });
   } catch (err) {
@@ -75,7 +81,7 @@ export const handler: Handler = async (event) => {
     const res = await fetch(bgUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jobId, modelId, business }),
+      body: JSON.stringify({ jobId, modelId, researchModelId, business }),
     });
     if (res.status !== 202 && res.status !== 200) {
       const txt = await res.text();
@@ -89,5 +95,5 @@ export const handler: Handler = async (event) => {
     });
   }
 
-  return jsonRes(202, { jobId, status: "pending", modelId });
+  return jsonRes(202, { jobId, status: "pending", modelId, researchModelId });
 };

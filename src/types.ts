@@ -159,6 +159,7 @@ export interface JobRecord {
   createdAt: number;
   updatedAt: number;
   modelId: DesignModelId;
+  researchModelId?: DesignModelId;
   businessName: string;
   site?: GeneratedSite;
   dossier?: unknown;

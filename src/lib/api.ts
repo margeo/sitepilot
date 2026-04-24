@@ -46,13 +46,15 @@ export interface StartGenerateResponse {
   jobId: string;
   status: "pending";
   modelId: DesignModelId;
+  researchModelId: DesignModelId;
 }
 
 export function startGenerate(
   business: BusinessDetails,
   modelId: DesignModelId,
+  researchModelId: DesignModelId,
 ): Promise<StartGenerateResponse> {
-  return post<StartGenerateResponse>("generate-site", { business, modelId });
+  return post<StartGenerateResponse>("generate-site", { business, modelId, researchModelId });
 }
 
 export async function getJobStatus(jobId: string): Promise<JobRecord> {
@@ -69,12 +71,13 @@ export async function getJobStatus(jobId: string): Promise<JobRecord> {
 export async function generateSite(
   business: BusinessDetails,
   modelId: DesignModelId,
+  researchModelId: DesignModelId,
   onTick?: (rec: JobRecord) => void,
   opts: { intervalMs?: number; timeoutMs?: number } = {},
 ): Promise<{ jobId: string; record: JobRecord }> {
   const interval = opts.intervalMs ?? 2000;
   const timeout = opts.timeoutMs ?? 5 * 60 * 1000; // 5 min
-  const { jobId } = await startGenerate(business, modelId);
+  const { jobId } = await startGenerate(business, modelId, researchModelId);
   const deadline = Date.now() + timeout;
 
   while (Date.now() < deadline) {

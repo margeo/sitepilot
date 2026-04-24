@@ -1,12 +1,46 @@
-// Brand research phase: Gemini + Google Search grounding produces a
-// rich dossier that downstream design phases consume. Shared so both
-// research-business.ts (standalone call) and generate-site-background.ts
-// (pipeline step) use the same prompt + parser.
+// Brand research phase: produces a grounded dossier from the business's
+// public web presence. Default path = Gemini + google_search tool (direct
+// API). When `researchModelId` is supplied, we route to the matching
+// provider-direct API so web-search capability is preserved.
 
+import Anthropic from "@anthropic-ai/sdk";
 import type { Dossier } from "./dossier";
 import { callGemini, hasGemini } from "./gemini";
 
 export { hasGemini };
+
+// Map a dropdown modelId ("provider:model") to the provider-direct call
+// needed for research. OpenRouter can't pass Gemini's `google_search` or
+// Anthropic's `web_search_20260209` tools through its generic chat API,
+// so OpenRouter options reroute to the corresponding direct provider.
+function resolveResearchRoute(modelId: string): {
+  provider: "gemini" | "anthropic";
+  directModel: string;
+} {
+  const colon = modelId.indexOf(":");
+  const provider = modelId.slice(0, colon);
+  const model = modelId.slice(colon + 1);
+
+  if (provider === "anthropic") {
+    // anthropic:claude-opus-4-7 — already direct.
+    return { provider: "anthropic", directModel: model };
+  }
+  if (provider === "openrouter") {
+    if (model.startsWith("google/")) {
+      // openrouter:google/gemini-3.1-flash-lite-preview
+      // → direct Gemini model: gemini-3.1-flash-lite-preview
+      return { provider: "gemini", directModel: model.replace(/^google\//, "") };
+    }
+    if (model.startsWith("anthropic/")) {
+      // openrouter:anthropic/claude-opus-4.7
+      // → direct Anthropic model: claude-opus-4-7 (dot -> dash)
+      const direct = model.replace(/^anthropic\//, "").replace(/\./g, "-");
+      return { provider: "anthropic", directModel: direct };
+    }
+  }
+  // Fallback: use Gemini 2.5 Flash direct (stable research baseline).
+  return { provider: "gemini", directModel: "gemini-2.5-flash" };
+}
 
 export interface ResearchBusiness {
   name: string;
@@ -95,8 +129,12 @@ function extractJson(text: string): string | null {
   return obj ? obj[0] : null;
 }
 
-export async function researchBusiness(business: ResearchBusiness): Promise<{ dossier: Dossier; model: string }> {
+async function researchViaGemini(
+  business: ResearchBusiness,
+  model: string,
+): Promise<{ dossier: Dossier; model: string }> {
   const result = await callGemini({
+    model,
     systemInstruction: SYSTEM_PROMPT,
     prompt: buildUserPrompt(business),
     enableSearch: true,
@@ -115,12 +153,76 @@ export async function researchBusiness(business: ResearchBusiness): Promise<{ do
       `Research: failed to parse dossier JSON: ${parseErr instanceof Error ? parseErr.message : parseErr}`,
     );
   }
-
   if (!dossier.sources?.length && result.groundingSources.length > 0) {
     dossier.sources = result.groundingSources
       .filter((s) => s.uri)
       .map((s) => ({ title: s.title, uri: s.uri }));
   }
-
   return { dossier, model: result.model };
+}
+
+async function researchViaAnthropic(
+  business: ResearchBusiness,
+  model: string,
+): Promise<{ dossier: Dossier; model: string }> {
+  const key = process.env.ANTHROPIC_API_KEY;
+  if (!key) throw new Error("ANTHROPIC_API_KEY not set — required for Claude research path");
+  const client = new Anthropic({ apiKey: key });
+
+  // Claude's web_search tool lets the model issue live web queries during
+  // the turn. Results come back in citation-annotated content blocks.
+  const body = {
+    model,
+    max_tokens: 3000,
+    system: SYSTEM_PROMPT,
+    tools: [{ type: "web_search_20250305", name: "web_search", max_uses: 8 }],
+    messages: [{ role: "user", content: [{ type: "text", text: buildUserPrompt(business) }] }],
+  } as unknown as Parameters<typeof client.messages.create>[0];
+
+  const msg = (await client.messages.create(body)) as {
+    content: Array<{ type: string; text?: string; citations?: Array<{ url?: string; title?: string }> }>;
+  };
+
+  // Concatenate text blocks, collect citations as grounding sources.
+  const text = msg.content
+    .filter((c) => c.type === "text")
+    .map((c) => c.text ?? "")
+    .join("");
+  const citations: Array<{ title?: string; uri?: string }> = [];
+  for (const c of msg.content) {
+    for (const cit of c.citations ?? []) {
+      if (cit.url) citations.push({ title: cit.title, uri: cit.url });
+    }
+  }
+
+  const jsonStr = extractJson(text);
+  if (!jsonStr) throw new Error(`Research: Claude returned no JSON. Raw: ${text.slice(0, 400)}`);
+
+  let dossier: Dossier;
+  try {
+    dossier = JSON.parse(jsonStr) as Dossier;
+  } catch (parseErr) {
+    throw new Error(
+      `Research: failed to parse dossier JSON: ${parseErr instanceof Error ? parseErr.message : parseErr}`,
+    );
+  }
+  if (!dossier.sources?.length && citations.length > 0) {
+    dossier.sources = citations;
+  }
+  return { dossier, model };
+}
+
+export async function researchBusiness(
+  business: ResearchBusiness,
+  researchModelId?: string,
+): Promise<{ dossier: Dossier; model: string }> {
+  // Default to Gemini 2.5 Flash direct (the stable baseline).
+  if (!researchModelId) {
+    return researchViaGemini(business, "gemini-2.5-flash");
+  }
+  const route = resolveResearchRoute(researchModelId);
+  if (route.provider === "gemini") {
+    return researchViaGemini(business, route.directModel);
+  }
+  return researchViaAnthropic(business, route.directModel);
 }

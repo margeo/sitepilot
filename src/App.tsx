@@ -16,10 +16,17 @@ import type {
 
 const DEFAULT_MODEL: DesignModelId = "openrouter:google/gemini-3.1-flash-lite-preview";
 const LS_MODEL_KEY = "sitepilot.designModel.v1";
+const LS_RESEARCH_MODEL_KEY = "sitepilot.researchModel.v1";
 
 function loadModel(): DesignModelId {
   if (typeof window === "undefined") return DEFAULT_MODEL;
   const saved = window.localStorage.getItem(LS_MODEL_KEY);
+  return (saved as DesignModelId) || DEFAULT_MODEL;
+}
+
+function loadResearchModel(): DesignModelId {
+  if (typeof window === "undefined") return DEFAULT_MODEL;
+  const saved = window.localStorage.getItem(LS_RESEARCH_MODEL_KEY);
   return (saved as DesignModelId) || DEFAULT_MODEL;
 }
 
@@ -37,6 +44,14 @@ export default function App() {
     setDesignModelState(id);
     try {
       window.localStorage.setItem(LS_MODEL_KEY, id);
+    } catch {}
+  }
+
+  const [researchModel, setResearchModelState] = useState<DesignModelId>(loadResearchModel);
+  function setResearchModel(id: DesignModelId) {
+    setResearchModelState(id);
+    try {
+      window.localStorage.setItem(LS_RESEARCH_MODEL_KEY, id);
     } catch {}
   }
 
@@ -93,7 +108,7 @@ export default function App() {
     }, 500);
     try {
       const { business } = await fetchDetails(b.place_id, b);
-      const { record } = await generateSite(business, designModel, (rec) => {
+      const { record } = await generateSite(business, designModel, researchModel, (rec) => {
         setGenerationStatus(rec.status);
       });
       if (record.status === "error") {
@@ -138,6 +153,8 @@ export default function App() {
           demoMode={demoMode}
           designModel={designModel}
           onDesignModelChange={setDesignModel}
+          researchModel={researchModel}
+          onResearchModelChange={setResearchModel}
         />
 
         {!demoMode && (

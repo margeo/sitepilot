@@ -15,6 +15,8 @@ interface Props {
   demoMode: boolean;
   designModel: DesignModelId;
   onDesignModelChange: (id: DesignModelId) => void;
+  researchModel: DesignModelId;
+  onResearchModelChange: (id: DesignModelId) => void;
 }
 
 function validateLocation(loc: string): { ok: boolean; hint?: string } {
@@ -24,8 +26,17 @@ function validateLocation(loc: string): { ok: boolean; hint?: string } {
   return { ok: true };
 }
 
-export function SearchForm({ onSearch, loading, demoMode, designModel, onDesignModelChange }: Props) {
+export function SearchForm({
+  onSearch,
+  loading,
+  demoMode,
+  designModel,
+  onDesignModelChange,
+  researchModel,
+  onResearchModelChange,
+}: Props) {
   const designModelHint = DESIGN_MODELS.find((m) => m.value === designModel)?.hint;
+  const researchModelHint = DESIGN_MODELS.find((m) => m.value === researchModel)?.hint;
   const [sector, setSector] = useState<Sector>("restaurant");
   const [location, setLocation] = useState("Paros, Greece");
   const [noWebsiteOnly, setNoWebsiteOnly] = useState(true);
@@ -290,6 +301,28 @@ export function SearchForm({ onSearch, loading, demoMode, designModel, onDesignM
             </div>
           )}
         </div>
+      </div>
+
+      <div>
+        <label htmlFor="researchModel">Research model (web-grounded dossier)</label>
+        <select
+          id="researchModel"
+          value={researchModel}
+          onChange={(e) => onResearchModelChange(e.target.value as DesignModelId)}
+          style={{ width: "100%" }}
+        >
+          {DESIGN_MODELS.map((m) => (
+            <option key={m.value} value={m.value}>
+              {m.label}
+            </option>
+          ))}
+        </select>
+        {researchModelHint && (
+          <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 4 }}>
+            {researchModelHint} · OpenRouter options re-routed to direct API so
+            web-search tools work.
+          </div>
+        )}
       </div>
 
       <div>

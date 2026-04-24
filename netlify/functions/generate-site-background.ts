@@ -11,6 +11,7 @@ import type { DesignerBusiness } from "./_shared/designer-prompt";
 interface JobInput {
   jobId: string;
   modelId: string;
+  researchModelId?: string;
   business: DesignerBusiness & ResearchBusiness & {
     lead_score?: number;
     photo_refs?: string[];
@@ -22,6 +23,7 @@ interface JobRecord {
   createdAt: number;
   updatedAt: number;
   modelId: string;
+  researchModelId?: string;
   businessName: string;
   site?: {
     html: string;
@@ -53,7 +55,7 @@ export const handler: Handler = async (event) => {
   } catch {
     return { statusCode: 400, body: "Invalid JSON" };
   }
-  const { jobId, modelId, business } = input;
+  const { jobId, modelId, researchModelId, business } = input;
   if (!jobId || !modelId || !business?.name) {
     return { statusCode: 400, body: "Missing jobId, modelId, or business.name" };
   }
@@ -64,16 +66,23 @@ export const handler: Handler = async (event) => {
     createdAt: t0,
     updatedAt: t0,
     modelId,
+    researchModelId,
     businessName: business.name,
   };
   await writeJob(jobId, base);
 
   try {
-    if (!hasGemini()) throw new Error("GEMINI_API_KEY not set");
+    // Research phase needs either Gemini (default/gemini-routed options) or
+    // Anthropic (claude-routed options). Gate on whichever one the resolved
+    // route will need; for safety, at least require GEMINI_API_KEY since the
+    // default path uses it.
+    if (!hasGemini() && !process.env.ANTHROPIC_API_KEY) {
+      throw new Error("Neither GEMINI_API_KEY nor ANTHROPIC_API_KEY set — research cannot run");
+    }
 
     // Phase 1: research
     const researchStart = Date.now();
-    const { dossier } = await researchBusiness(business);
+    const { dossier } = await researchBusiness(business, researchModelId);
     const researchMs = Date.now() - researchStart;
 
     await writeJob(jobId, {
