@@ -12,6 +12,9 @@
 [functions."extract-listings"]
   timeout = 60
 
+[functions."research-business"]
+  timeout = 120
+
 [dev]
   command = "npm run dev:vite"
   port = 8888
