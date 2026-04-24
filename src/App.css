@@ -319,3 +319,38 @@
   from { opacity: 0; transform: translateY(4px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+@media (max-width: 780px) {
+  .app {
+    grid-template-columns: 1fr;
+  }
+  .sidebar {
+    max-height: none;
+    border-right: none;
+    border-bottom: 1px solid var(--border);
+    padding: 16px;
+  }
+  .main {
+    max-height: none;
+    padding: 16px;
+  }
+  .form-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  .results-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 12px 14px;
+  }
+  .results-row.header {
+    display: none;
+  }
+  .preview-wrap {
+    grid-template-columns: 1fr;
+    padding: 12px;
+    gap: 12px;
+  }
+  .preview-iframe {
+    height: 480px;
+  }
+}
