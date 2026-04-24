@@ -7,7 +7,7 @@
   node_bundler = "esbuild"
 
 [functions."generate-site"]
-  timeout = 60
+  timeout = 120
 
 [functions."extract-listings"]
   timeout = 60

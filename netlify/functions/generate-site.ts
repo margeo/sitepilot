@@ -2,6 +2,10 @@ import type { Handler } from "@netlify/functions";
 import { buildTemplateSite, type TemplateBusiness } from "./_shared/template";
 import { SECTOR_THEMES, type Sector } from "./_shared/sectors";
 import { callLLM, hasLLM } from "./_shared/llm";
+import { hasGemini, callGemini } from "./_shared/gemini";
+import { designSite } from "./_shared/design-director";
+import { buildModularSite, type SiteData } from "./_shared/modular-template";
+import type { Dossier } from "./_shared/dossier";
 
 interface Body {
   business: {
@@ -19,7 +23,10 @@ interface Body {
     editorial_summary?: string;
     sector?: Sector;
     lead_score?: number;
+    website_uri?: string;
+    types?: string[];
   };
+  mode?: "v1" | "v2"; // default "v2" when all keys are available
 }
 
 function jsonRes(statusCode: number, body: unknown) {
@@ -32,6 +39,128 @@ function jsonRes(statusCode: number, body: unknown) {
 
 function photoUrl(ref: string, maxwidth = 1200) {
   return `/.netlify/functions/photos?reference=${encodeURIComponent(ref)}&maxwidth=${maxwidth}`;
+}
+
+// --- Research phase (uses Gemini with Google Search grounding) ---
+const RESEARCH_SYSTEM = `You are a brand researcher. Given a business's basic Google Places data,
+research its public web presence (Instagram, Facebook, Tripadvisor, Booking.com, Airbnb, blogs,
+travel guides) and produce a JSON brand dossier.
+Ground everything in what you actually find. Never invent specifics.
+Your final message MUST end with a single fenced JSON block (\`\`\`json ... \`\`\`).`;
+
+function buildResearchPrompt(b: Body["business"]): string {
+  const addr = b.formatted_address || b.address || "";
+  const reviews = (b.reviews ?? [])
+    .slice(0, 5)
+    .map((r) => `- ${r.author ?? "R"} (${r.rating ?? "?"}): ${(r.text ?? "").slice(0, 250)}`)
+    .join("\n");
+  return `Business:
+Name: ${b.name}
+Address: ${addr}
+Sector: ${b.sector ?? "unknown"}
+Google rating: ${b.rating ?? "n/a"} (${b.user_ratings_total ?? 0} reviews)
+Existing site: ${b.website_uri ?? "none"}
+Editorial: ${b.editorial_summary ?? "(none)"}
+Top reviews:
+${reviews || "(none)"}
+
+Search the web for this business (Instagram, Facebook, Tripadvisor, Airbnb, Booking, travel blogs).
+Produce a dossier JSON:
+{
+  "name": "string",
+  "category_descriptor": "short phrase",
+  "address": "string",
+  "location_notes": "1-2 sentences or null",
+  "season": "summer|winter|year_round|null",
+  "social": {"instagram":null,"facebook":null,"tripadvisor":null,"airbnb":null,"booking":null,"website":null},
+  "brand_identity": {"vibe":"","keywords":[],"target_audience":"","unique_story":""},
+  "signature_elements": [],
+  "review_highlights": [{"quote":"","theme":""}],
+  "confidence": 0.0
+}
+Return inside a \`\`\`json fenced block.`;
+}
+
+function extractJson(text: string): string | null {
+  const fenced = text.match(/```json\s*([\s\S]*?)\s*```/);
+  if (fenced) return fenced[1];
+  const obj = text.match(/\{[\s\S]*\}/);
+  return obj ? obj[0] : null;
+}
+
+async function researchBusiness(b: Body["business"]): Promise<Dossier> {
+  const result = await callGemini({
+    systemInstruction: RESEARCH_SYSTEM,
+    prompt: buildResearchPrompt(b),
+    enableSearch: true,
+    temperature: 0.4,
+    maxOutputTokens: 2400,
+  });
+  const jsonStr = extractJson(result.text);
+  if (!jsonStr) throw new Error(`Research: no JSON. Raw: ${result.text.slice(0, 300)}`);
+  const dossier = JSON.parse(jsonStr) as Dossier;
+  if (!dossier.sources?.length && result.groundingSources.length) {
+    dossier.sources = result.groundingSources
+      .filter((s) => s.uri)
+      .map((s) => ({ title: s.title, uri: s.uri }));
+  }
+  return dossier;
+}
+
+// --- Assembly helpers ---
+function buildSiteData(b: Body["business"]): SiteData {
+  const photo_urls = (b.photo_refs ?? []).slice(0, 10).map((r) => photoUrl(r, 1600));
+  return {
+    place_id: b.place_id,
+    google_maps_uri: b.google_maps_uri,
+    address: b.formatted_address || b.address,
+    phones: b.phones,
+    opening_hours: b.opening_hours,
+    photo_urls,
+    reviews: b.reviews ?? [],
+  };
+}
+
+// --- v1 legacy path: single LLM call → swap copy into fixed template ---
+async function generateV1(b: Body["business"], sector: Sector, templateBusiness: TemplateBusiness, seo_keywords: string[], suggested_pages: string[]) {
+  const theme = SECTOR_THEMES[sector];
+  const reviews = (b.reviews ?? [])
+    .slice(0, 5)
+    .map((r) => `- ${r.author ?? "R"} (${r.rating ?? "?"}): ${(r.text ?? "").slice(0, 200)}`)
+    .join("\n");
+  const systemPrompt = [
+    "You are a senior copywriter creating website copy for a local business.",
+    "Produce SHORT, natural copy specific to THIS business — draw on the reviews.",
+    "Never invent facts. Return strictly valid JSON.",
+  ].join(" ");
+  const userPrompt = `Business:
+Name: ${b.name}
+Sector: ${sector} (${theme.label})
+Rating: ${b.rating ?? "n/a"} (${b.user_ratings_total ?? 0} reviews)
+Reviews:
+${reviews || "(none)"}
+
+Return JSON: { "tagline": "...", "about_text": "...", "seo_keywords": [...] }`;
+  const { text, provider } = await callLLM({ system: systemPrompt, user: userPrompt, maxTokens: 900 });
+  const jsonStr = extractJson(text);
+  if (!jsonStr) throw new Error("v1: no JSON");
+  const parsed = JSON.parse(jsonStr) as { tagline?: string; about_text?: string; seo_keywords?: string[] };
+  let html = buildTemplateSite({
+    ...templateBusiness,
+    editorial_summary: parsed.about_text || templateBusiness.editorial_summary,
+  });
+  if (parsed.tagline) {
+    html = html.replace(
+      /<p class="tagline">[\s\S]*?<\/p>/,
+      `<p class="tagline">${parsed.tagline.replace(/</g, "&lt;")}</p>`,
+    );
+  }
+  return {
+    html,
+    seo_keywords: parsed.seo_keywords?.length ? parsed.seo_keywords : seo_keywords,
+    suggested_pages,
+    generated_by: provider === "openrouter" ? "openrouter_v1" : "claude_v1",
+  };
 }
 
 export const handler: Handler = async (event) => {
@@ -47,9 +176,7 @@ export const handler: Handler = async (event) => {
 
   const sector: Sector = b.sector ?? "local_services";
   const theme = SECTOR_THEMES[sector];
-
   const photo_urls = (b.photo_refs ?? []).slice(0, 8).map((r) => photoUrl(r, 1200));
-
   const templateBusiness: TemplateBusiness = {
     name: b.name,
     sector,
@@ -65,7 +192,6 @@ export const handler: Handler = async (event) => {
     editorial_summary: b.editorial_summary,
     photo_urls,
   };
-
   const seo_keywords = [
     ...theme.keywords,
     b.name.toLowerCase(),
@@ -73,93 +199,68 @@ export const handler: Handler = async (event) => {
   ];
   const suggested_pages = theme.suggestedPages;
 
-  // No LLM configured: fall back to static template.
-  if (!hasLLM()) {
-    const html = buildTemplateSite(templateBusiness);
-    return jsonRes(200, {
-      site: { html, seo_keywords, suggested_pages, generated_by: "template" },
-      demo: false,
-    });
-  }
+  const mode: "v1" | "v2" = body.mode ?? (hasGemini() && hasLLM() ? "v2" : "v1");
 
-  try {
-    const reviewSummaries = (b.reviews ?? [])
-      .slice(0, 5)
-      .map((r) => `- ${r.author ?? "Reviewer"} (${r.rating ?? "?"}): ${(r.text ?? "").slice(0, 200)}`)
-      .join("\n");
-
-    const systemPrompt = [
-      "You are a senior copywriter and UX strategist creating a website proposal for a local business.",
-      "Produce SHORT, natural, conversion-focused copy that feels specific to THIS business, not generic.",
-      "Draw on the reviews and editorial summary to capture the business's actual vibe.",
-      "Never invent specific facts (prices, dishes, awards) that are not in the supplied data.",
-      "Return strictly valid JSON — no prose outside the JSON object.",
-    ].join(" ");
-
-    const userPrompt = `Business data:
-Name: ${b.name}
-Sector: ${sector} (${theme.label})
-Address: ${b.formatted_address || b.address}
-Rating: ${b.rating ?? "n/a"} (${b.user_ratings_total ?? 0} reviews)
-Editorial summary: ${b.editorial_summary ?? "n/a"}
-Top reviews:
-${reviewSummaries || "(none)"}
-
-Produce JSON with these exact keys:
-{
-  "tagline": "12-18 word hero subtitle that captures the vibe",
-  "about_text": "90-150 word About paragraph. Friendly, specific to the business. No made-up facts.",
-  "seo_keywords": ["array of 6-10 keywords"],
-  "additional_tagline_short": "6-word punchy version for meta description"
-}`;
-
-    const { text: raw, provider, model } = await callLLM({
-      system: systemPrompt,
-      user: userPrompt,
-      maxTokens: 900,
-    });
-
-    const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) throw new Error(`LLM (${provider} ${model}) returned no JSON object`);
-    const parsed = JSON.parse(jsonMatch[0]) as {
-      tagline?: string;
-      about_text?: string;
-      seo_keywords?: string[];
-      additional_tagline_short?: string;
-    };
-
-    let html = buildTemplateSite({
-      ...templateBusiness,
-      editorial_summary: parsed.about_text || templateBusiness.editorial_summary,
-    });
-    if (parsed.tagline) {
-      html = html.replace(
-        /<p class="tagline">[\s\S]*?<\/p>/,
-        `<p class="tagline">${parsed.tagline.replace(/</g, "&lt;")}</p>`,
-      );
+  // Mode V2: full research → design → assemble pipeline
+  if (mode === "v2" && hasGemini() && hasLLM()) {
+    try {
+      const dossier = await researchBusiness(b);
+      const { spec, provider, model } = await designSite({ dossier, sector });
+      const html = buildModularSite({ dossier, spec, data: buildSiteData(b) });
+      return jsonRes(200, {
+        site: {
+          html,
+          seo_keywords: dossier.brand_identity.keywords?.length
+            ? dossier.brand_identity.keywords
+            : seo_keywords,
+          suggested_pages,
+          generated_by: `v2_${provider}`,
+        },
+        demo: false,
+        dossier,
+        design: { palette: spec.palette_id, sections: spec.sections.map((s) => s.type), model },
+      });
+    } catch (err) {
+      const reason = err instanceof Error ? err.message : String(err);
+      // Fall through to v1
+      if (hasLLM()) {
+        try {
+          const v1 = await generateV1(b, sector, templateBusiness, seo_keywords, suggested_pages);
+          return jsonRes(200, {
+            site: v1,
+            demo: false,
+            note: `v2 pipeline failed, used v1. Reason: ${reason}`,
+          });
+        } catch {}
+      }
+      const html = buildTemplateSite(templateBusiness);
+      return jsonRes(200, {
+        site: { html, seo_keywords, suggested_pages, generated_by: "template" },
+        demo: false,
+        note: `v2 and v1 failed, used template. Reason: ${reason}`,
+      });
     }
-
-    return jsonRes(200, {
-      site: {
-        html,
-        seo_keywords: parsed.seo_keywords?.length ? parsed.seo_keywords : seo_keywords,
-        suggested_pages,
-        generated_by: provider === "openrouter" ? "openrouter" : "claude",
-      },
-      demo: false,
-    });
-  } catch (err) {
-    // Graceful fallback: template site + note about the failure.
-    const html = buildTemplateSite(templateBusiness);
-    return jsonRes(200, {
-      site: {
-        html,
-        seo_keywords,
-        suggested_pages,
-        generated_by: "template",
-      },
-      demo: false,
-      note: `LLM generation failed, used template. Reason: ${err instanceof Error ? err.message : String(err)}`,
-    });
   }
+
+  // Mode V1: single-shot copy swap
+  if (hasLLM()) {
+    try {
+      const v1 = await generateV1(b, sector, templateBusiness, seo_keywords, suggested_pages);
+      return jsonRes(200, { site: v1, demo: false });
+    } catch (err) {
+      const html = buildTemplateSite(templateBusiness);
+      return jsonRes(200, {
+        site: { html, seo_keywords, suggested_pages, generated_by: "template" },
+        demo: false,
+        note: `v1 failed, used template. Reason: ${err instanceof Error ? err.message : err}`,
+      });
+    }
+  }
+
+  // No keys: template only
+  const html = buildTemplateSite(templateBusiness);
+  return jsonRes(200, {
+    site: { html, seo_keywords, suggested_pages, generated_by: "template" },
+    demo: false,
+  });
 };
