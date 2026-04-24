@@ -1,9 +1,10 @@
-// Thin start endpoint. Validates input, writes a pending job record to
-// Netlify Blobs, fires the background function, and returns {jobId} in <1s.
-// The actual generation runs in generate-site-background.ts; the frontend
-// polls generate-status.ts for the result.
+// Thin start endpoint (v2 handler — Request/Response — so Netlify Blobs
+// auto-configures its runtime context). Validates input, writes a pending
+// job record to Netlify Blobs, fires the background function, and returns
+// {jobId} in <1s. Actual generation runs in generate-site-background.ts;
+// the frontend polls generate-status.ts for the result.
 
-import type { Handler } from "@netlify/functions";
+import type { Config, Context } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 import { randomUUID } from "crypto";
 
@@ -29,34 +30,35 @@ interface Body {
   researchModelId?: string;
 }
 
-function jsonRes(statusCode: number, body: unknown) {
-  return {
-    statusCode,
-    headers: { "content-type": "application/json" },
-    body: JSON.stringify(body),
-  };
-}
-
-export const handler: Handler = async (event) => {
-  if (event.httpMethod !== "POST") return jsonRes(405, { error: "POST only" });
+export default async (req: Request, _context: Context) => {
+  if (req.method !== "POST") {
+    return Response.json({ error: "POST only" }, { status: 405 });
+  }
 
   let body: Body;
   try {
-    body = JSON.parse(event.body || "{}") as Body;
+    body = (await req.json()) as Body;
   } catch {
-    return jsonRes(400, { error: "Invalid JSON" });
+    return Response.json({ error: "Invalid JSON" }, { status: 400 });
   }
-  const business = body.business;
-  if (!business?.name) return jsonRes(400, { error: "business.name required" });
 
+  const business = body.business;
+  if (!business?.name) {
+    return Response.json({ error: "business.name required" }, { status: 400 });
+  }
   if (!body.modelId || !ALLOWED_MODELS.has(body.modelId)) {
-    return jsonRes(400, { error: "Valid modelId is required (pick a design model in the UI)" });
+    return Response.json(
+      { error: "Valid modelId is required (pick a design model in the UI)" },
+      { status: 400 },
+    );
   }
   if (!body.researchModelId || !ALLOWED_MODELS.has(body.researchModelId)) {
-    return jsonRes(400, {
-      error: "Valid researchModelId is required (pick a research model in the UI)",
-    });
+    return Response.json(
+      { error: "Valid researchModelId is required (pick a research model in the UI)" },
+      { status: 400 },
+    );
   }
+
   const modelId = body.modelId;
   const researchModelId = body.researchModelId;
   const jobId = randomUUID();
@@ -73,17 +75,18 @@ export const handler: Handler = async (event) => {
       businessName: business.name,
     });
   } catch (err) {
-    return jsonRes(500, {
-      error: `Failed to write job record: ${err instanceof Error ? err.message : err}`,
-    });
+    return Response.json(
+      {
+        error: `Failed to write job record: ${err instanceof Error ? err.message : err}`,
+      },
+      { status: 500 },
+    );
   }
 
   const baseUrl = process.env.URL || process.env.DEPLOY_URL || "http://localhost:8888";
   const bgUrl = `${baseUrl}/.netlify/functions/generate-site-background`;
 
   try {
-    // Await the 202 acknowledgement so we know the background fn was scheduled.
-    // The bg fn itself then runs asynchronously up to 15 min.
     const res = await fetch(bgUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
@@ -91,15 +94,23 @@ export const handler: Handler = async (event) => {
     });
     if (res.status !== 202 && res.status !== 200) {
       const txt = await res.text();
-      return jsonRes(500, {
-        error: `Background fn returned ${res.status}: ${txt.slice(0, 200)}`,
-      });
+      return Response.json(
+        { error: `Background fn returned ${res.status}: ${txt.slice(0, 200)}` },
+        { status: 500 },
+      );
     }
   } catch (err) {
-    return jsonRes(500, {
-      error: `Failed to trigger background fn: ${err instanceof Error ? err.message : err}`,
-    });
+    return Response.json(
+      {
+        error: `Failed to trigger background fn: ${err instanceof Error ? err.message : err}`,
+      },
+      { status: 500 },
+    );
   }
 
-  return jsonRes(202, { jobId, status: "pending", modelId, researchModelId });
+  return Response.json({ jobId, status: "pending", modelId, researchModelId }, { status: 202 });
+};
+
+export const config: Config = {
+  path: "/.netlify/functions/generate-site",
 };

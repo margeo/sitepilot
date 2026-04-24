@@ -1,8 +1,10 @@
-// Background function: runs the slow research + free-form-design pipeline
-// and writes the final site into Netlify Blobs. Triggered fire-and-forget
-// by generate-site.ts; polled by generate-status.ts.
+// Background function (v2 handler). Runs the slow research + free-form-design
+// pipeline and writes the final site into Netlify Blobs. Triggered
+// fire-and-forget by generate-site.ts; polled by generate-status.ts.
+// Filename ends in `-background.ts` so Netlify runs it asynchronously
+// with up to a 15-minute execution window.
 
-import type { Handler } from "@netlify/functions";
+import type { Config, Context } from "@netlify/functions";
 import { getStore } from "@netlify/blobs";
 import { researchBusiness, hasGemini, type ResearchBusiness } from "./_shared/research";
 import { designSiteFreeForm } from "./_shared/free-form-designer";
@@ -47,17 +49,21 @@ async function writeJob(jobId: string, record: JobRecord) {
   await store.setJSON(jobId, record);
 }
 
-export const handler: Handler = async (event) => {
-  if (event.httpMethod !== "POST") return { statusCode: 405, body: "POST only" };
+export default async (req: Request, _context: Context) => {
+  if (req.method !== "POST") {
+    return new Response("POST only", { status: 405 });
+  }
+
   let input: JobInput;
   try {
-    input = JSON.parse(event.body || "{}") as JobInput;
+    input = (await req.json()) as JobInput;
   } catch {
-    return { statusCode: 400, body: "Invalid JSON" };
+    return new Response("Invalid JSON", { status: 400 });
   }
+
   const { jobId, modelId, researchModelId, business } = input;
   if (!jobId || !modelId || !business?.name) {
-    return { statusCode: 400, body: "Missing jobId, modelId, or business.name" };
+    return new Response("Missing jobId, modelId, or business.name", { status: 400 });
   }
 
   const t0 = Date.now();
@@ -72,15 +78,10 @@ export const handler: Handler = async (event) => {
   await writeJob(jobId, base);
 
   try {
-    // Research phase needs either Gemini (default/gemini-routed options) or
-    // Anthropic (claude-routed options). Gate on whichever one the resolved
-    // route will need; for safety, at least require GEMINI_API_KEY since the
-    // default path uses it.
     if (!hasGemini() && !process.env.ANTHROPIC_API_KEY) {
       throw new Error("Neither GEMINI_API_KEY nor ANTHROPIC_API_KEY set — research cannot run");
     }
 
-    // Phase 1: research
     const researchStart = Date.now();
     const { dossier } = await researchBusiness(business, researchModelId);
     const researchMs = Date.now() - researchStart;
@@ -93,7 +94,6 @@ export const handler: Handler = async (event) => {
       elapsedMs: { research: researchMs },
     });
 
-    // Phase 2: free-form design
     const photoUrls = (business.photo_refs ?? []).slice(0, 10).map((r) => photoUrl(r, 1600));
     const designerBusiness: DesignerBusiness = {
       name: business.name,
@@ -135,7 +135,7 @@ export const handler: Handler = async (event) => {
       },
     };
     await writeJob(jobId, final);
-    return { statusCode: 202, body: "done" };
+    return new Response("done", { status: 202 });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     await writeJob(jobId, {
@@ -145,6 +145,10 @@ export const handler: Handler = async (event) => {
       elapsedMs: { total: Date.now() - t0 },
       error: msg,
     });
-    return { statusCode: 202, body: "error" };
+    return new Response("error", { status: 202 });
   }
+};
+
+export const config: Config = {
+  path: "/.netlify/functions/generate-site-background",
 };
