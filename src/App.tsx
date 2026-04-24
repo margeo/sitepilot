@@ -76,7 +76,7 @@ export default function App() {
     <div className="app">
       <aside className="sidebar">
         <div className="brand">
-          <img src="/logo.png" alt="SitePilot" className="brand-img" />
+          <img src="/logo-final.png" alt="SitePilot" className="brand-img" />
           <small>Mock Site Generator</small>
         </div>
 
