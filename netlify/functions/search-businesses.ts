@@ -25,23 +25,53 @@ interface Basic {
 
 interface SectorConfig {
   textQuery: string;
-  includedType: string;
+  includedTypes: string[];
 }
 
-// textQuery = human-readable search phrase (Google also uses it as semantic context)
-// includedType = exact Google primary place type (Table A). strictTypeFiltering
-// ensures Google only returns places whose primary type matches.
+// textQuery = human-readable search phrase (Google uses it as semantic context).
+// includedTypes = list of Google primary place types (Table A). We run one
+// request per type in parallel with strictTypeFiltering, then merge + dedupe.
 const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
-  restaurant: { textQuery: "restaurants", includedType: "restaurant" },
-  tavern: { textQuery: "Greek tavernas", includedType: "greek_restaurant" },
-  beach_bar: { textQuery: "beach bars", includedType: "bar" },
-  villa: { textQuery: "guest houses", includedType: "guest_house" },
-  hotel: { textQuery: "hotels", includedType: "hotel" },
-  boutique: { textQuery: "boutiques", includedType: "clothing_store" },
-  car_rental: { textQuery: "car rentals", includedType: "car_rental" },
-  boat_rental: { textQuery: "boat tour agencies", includedType: "tour_agency" },
-  beauty_wellness: { textQuery: "beauty salons", includedType: "beauty_salon" },
-  local_services: { textQuery: "local services", includedType: "store" },
+  restaurant: {
+    textQuery: "restaurants",
+    includedTypes: ["restaurant"],
+  },
+  tavern: {
+    textQuery: "Greek tavernas",
+    includedTypes: ["greek_restaurant"],
+  },
+  beach_bar: {
+    textQuery: "beach bars",
+    includedTypes: ["bar"],
+  },
+  villa: {
+    textQuery: "guest houses cottages apartments",
+    includedTypes: ["guest_house", "cottage", "bed_and_breakfast", "private_guest_room", "lodging", "inn"],
+  },
+  hotel: {
+    textQuery: "hotels",
+    includedTypes: ["hotel", "resort_hotel", "motel", "inn"],
+  },
+  boutique: {
+    textQuery: "boutiques",
+    includedTypes: ["clothing_store"],
+  },
+  car_rental: {
+    textQuery: "car rentals",
+    includedTypes: ["car_rental"],
+  },
+  boat_rental: {
+    textQuery: "boat tours and rentals",
+    includedTypes: ["tour_agency"],
+  },
+  beauty_wellness: {
+    textQuery: "beauty salons and spas",
+    includedTypes: ["beauty_salon", "spa", "hair_salon", "nail_salon"],
+  },
+  local_services: {
+    textQuery: "local services",
+    includedTypes: ["store"],
+  },
 };
 
 function jsonRes(statusCode: number, body: unknown) {
@@ -144,7 +174,14 @@ export const handler: Handler = async (event) => {
   try {
     const cfg = SECTOR_CONFIG[sector];
     const query = `${cfg.textQuery} in ${location}`;
-    const raw = await placesTextSearch(query, cfg.includedType, apiKey);
+    const perType = await Promise.all(
+      cfg.includedTypes.map((t) => placesTextSearch(query, t, apiKey)),
+    );
+    const byId = new Map<string, Basic>();
+    for (const list of perType) {
+      for (const b of list) byId.set(b.place_id, b);
+    }
+    const raw = Array.from(byId.values());
     const totalFound = raw.length;
     let results = raw;
     if (noWebsiteOnly) results = results.filter((r) => !r.has_website);
