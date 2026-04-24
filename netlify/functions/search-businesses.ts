@@ -335,11 +335,27 @@ export const handler: Handler = async (event) => {
       const byId = new Map<string, Basic>();
       for (const list of batches) for (const b of list) byId.set(b.place_id, b);
       raw = Array.from(byId.values());
-      // Post-filter to the sector's primary-type whitelist so broad text
-      // queries ("hotels in Symi") don't bleed other categories in (a
-      // restaurant named "Hotel X", a shop named "Villa Y", etc.).
+      // Post-filter 1: sector's primary-type whitelist so broad text queries
+      // ("hotels in Symi") don't bleed other categories in (a restaurant
+      // named "Hotel X", a shop named "Villa Y", etc.).
       const whitelist = new Set(cfg.includedTypes);
       raw = raw.filter((r) => (r.types ?? []).some((t) => whitelist.has(t)));
+      // Post-filter 2: geographic — Google's text search is not location-
+      // strict and will happily return matching businesses from other
+      // countries ("Symi" in Greece can yield results in Mèze, France).
+      // Drop any result whose formatted_address doesn't contain at least
+      // one meaningful token from the location string.
+      const locTokens = location
+        .toLowerCase()
+        .split(/[,/]/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 2);
+      if (locTokens.length > 0) {
+        raw = raw.filter((r) => {
+          const addr = (r.address || "").toLowerCase();
+          return locTokens.some((t) => addr.includes(t));
+        });
+      }
     } else {
       // Quick: single focused phrase, per-type strict filtering, 1 page. Fast.
       const quickQuery = `${cfg.quickQueries[0]} in ${location}`;

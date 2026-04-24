@@ -100,6 +100,51 @@ function extractJson(text: string): string | null {
   return obj ? obj[0] : null;
 }
 
+// Try to parse JSON with tolerance for common LLM glitches:
+// - raw newlines / tabs inside string values (must be escaped per JSON spec)
+// - trailing commas before } or ]
+// - leading/trailing whitespace
+// Returns the parsed object or throws the best available error.
+function parseTolerantJson<T>(raw: string): T {
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    // Clean up common issues and retry.
+    let s = raw.trim();
+    // Remove trailing commas before } or ]
+    s = s.replace(/,(\s*[}\]])/g, "$1");
+    // Escape literal newlines/tabs/CRs inside double-quoted string values.
+    // Walk the string and track whether we're inside a string literal.
+    let out = "";
+    let inStr = false;
+    let escaped = false;
+    for (let i = 0; i < s.length; i++) {
+      const ch = s[i];
+      if (escaped) {
+        out += ch;
+        escaped = false;
+        continue;
+      }
+      if (ch === "\\") {
+        out += ch;
+        escaped = true;
+        continue;
+      }
+      if (ch === '"') {
+        inStr = !inStr;
+        out += ch;
+        continue;
+      }
+      if (inStr && (ch === "\n" || ch === "\r" || ch === "\t")) {
+        out += ch === "\n" ? "\\n" : ch === "\r" ? "\\r" : "\\t";
+        continue;
+      }
+      out += ch;
+    }
+    return JSON.parse(out) as T;
+  }
+}
+
 // ---- Gemini direct (default path) ---------------------------------------
 
 async function researchViaGeminiDirect(
@@ -117,7 +162,7 @@ async function researchViaGeminiDirect(
 
   const jsonStr = extractJson(result.text);
   if (!jsonStr) throw new Error(`Research: Gemini returned no JSON. Raw: ${result.text.slice(0, 400)}`);
-  const dossier = JSON.parse(jsonStr) as Dossier;
+  const dossier = parseTolerantJson<Dossier>(jsonStr);
 
   if (!dossier.sources?.length && result.groundingSources.length > 0) {
     dossier.sources = result.groundingSources
@@ -169,7 +214,7 @@ async function researchViaOpenRouter(
   if (!text) throw new Error("Research (OpenRouter :online) returned empty content");
   const jsonStr = extractJson(text);
   if (!jsonStr) throw new Error(`Research (OpenRouter :online): no JSON. Raw: ${text.slice(0, 400)}`);
-  const dossier = JSON.parse(jsonStr) as Dossier;
+  const dossier = parseTolerantJson<Dossier>(jsonStr);
 
   // OpenRouter returns URL citations via the `annotations` array on the
   // message. Collect them as dossier.sources when the model didn't fill it in.
@@ -217,7 +262,7 @@ async function researchViaAnthropic(
   }
   const jsonStr = extractJson(text);
   if (!jsonStr) throw new Error(`Research (Anthropic): no JSON. Raw: ${text.slice(0, 400)}`);
-  const dossier = JSON.parse(jsonStr) as Dossier;
+  const dossier = parseTolerantJson<Dossier>(jsonStr);
   if (!dossier.sources?.length && citations.length > 0) dossier.sources = citations;
   return { dossier, model };
 }
