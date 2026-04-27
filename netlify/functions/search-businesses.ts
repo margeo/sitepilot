@@ -336,11 +336,21 @@ export const handler: Handler = async (event) => {
       const byId = new Map<string, Basic>();
       for (const list of batches) for (const b of list) byId.set(b.place_id, b);
       raw = Array.from(byId.values());
-      debug.perQuery = queries.map((q, i) => ({
-        query: q,
-        returned: batches[i].length,
-        names: batches[i].map((b) => b.name),
-      }));
+      // Walk batches in array order, crediting each query with the place_ids
+      // it sees first. Earlier queries absorb the bulk; later/niche queries'
+      // uniqueAdded count reveals whether they're earning their keep.
+      const seen = new Set<string>();
+      debug.perQuery = queries.map((q, i) => {
+        const batch = batches[i];
+        const newOnes = batch.filter((b) => !seen.has(b.place_id));
+        for (const b of newOnes) seen.add(b.place_id);
+        return {
+          query: q,
+          returned: batch.length,
+          uniqueAdded: newOnes.length,
+          newNames: newOnes.map((b) => b.name),
+        };
+      });
       debug.totalRaw = raw.length;
       // Post-filter 1: sector's primary-type whitelist so broad text queries
       // ("hotels in Symi") don't bleed other categories in (a restaurant
@@ -371,7 +381,12 @@ export const handler: Handler = async (event) => {
       // post-filter logic as deep — just one query instead of 23.
       const quickQuery = `${cfg.quickQueries[0]} in ${location}`;
       raw = await placesTextSearch({ apiKey, textQuery: quickQuery, maxPages: 2 });
-      debug.perQuery = [{ query: quickQuery, returned: raw.length, names: raw.map((b) => b.name) }];
+      debug.perQuery = [{
+        query: quickQuery,
+        returned: raw.length,
+        uniqueAdded: raw.length,
+        newNames: raw.map((b) => b.name),
+      }];
       debug.totalRaw = raw.length;
       const whitelist = new Set(cfg.includedTypes);
       raw = raw.filter((r) => (r.types ?? []).some((t) => whitelist.has(t)));
