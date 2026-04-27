@@ -1,9 +1,8 @@
-// TEMPORARY test endpoint. Fires 6 variant phrasings of "hotels in <location>"
-// against Google Places (paginated to 3 pages each) and reports per-variant
-// uniqueAdded so we can see whether rephrasing actually pulls new places out
-// of Google's ranker. Delete when done experimenting.
+// TEMPORARY test endpoint. Fires the SAME query N times back-to-back (fresh
+// page 1 each time, no pageToken) to see whether Google returns variation
+// across identical calls. Hypothesis: deterministic — same 20 every time.
 //
-// Usage: GET /.netlify/functions/search-test?location=Symi%2C%20Greece
+// Usage: GET /.netlify/functions/search-test?location=Symi%2C%20Greece&n=6
 
 import type { Handler } from "@netlify/functions";
 
@@ -12,49 +11,30 @@ const PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
 interface Place {
   place_id: string;
   name: string;
-  address: string;
 }
 
-async function placesTextSearch(
-  apiKey: string,
-  textQuery: string,
-  maxPages = 3,
-): Promise<Place[]> {
-  const all: Place[] = [];
-  let pageToken: string | undefined;
-  for (let page = 0; page < maxPages; page++) {
-    const body: Record<string, unknown> = { textQuery, pageSize: 20 };
-    if (pageToken) body.pageToken = pageToken;
-    const res = await fetch(PLACES_URL, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "places.id,places.displayName,places.formattedAddress,nextPageToken",
-      },
-      body: JSON.stringify(body),
-    });
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      console.warn(`[search-test] ${res.status} on "${textQuery}" p${page + 1}: ${t.slice(0, 200)}`);
-      return all;
-    }
-    const data = (await res.json()) as {
-      places?: Array<{ id: string; displayName?: { text?: string }; formattedAddress?: string }>;
-      nextPageToken?: string;
-    };
-    for (const p of data.places ?? []) {
-      all.push({
-        place_id: p.id,
-        name: p.displayName?.text ?? "",
-        address: p.formattedAddress ?? "",
-      });
-    }
-    pageToken = data.nextPageToken;
-    if (!pageToken) break;
-    if (page < maxPages - 1) await new Promise((r) => setTimeout(r, 2000));
+async function singleCall(apiKey: string, textQuery: string): Promise<Place[]> {
+  const res = await fetch(PLACES_URL, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "X-Goog-Api-Key": apiKey,
+      "X-Goog-FieldMask": "places.id,places.displayName",
+    },
+    body: JSON.stringify({ textQuery, pageSize: 20 }),
+  });
+  if (!res.ok) {
+    const t = await res.text().catch(() => "");
+    console.warn(`[search-test] ${res.status}: ${t.slice(0, 200)}`);
+    return [];
   }
-  return all;
+  const data = (await res.json()) as {
+    places?: Array<{ id: string; displayName?: { text?: string } }>;
+  };
+  return (data.places ?? []).map((p) => ({
+    place_id: p.id,
+    name: p.displayName?.text ?? "",
+  }));
 }
 
 function jsonRes(status: number, body: unknown) {
@@ -71,27 +51,25 @@ export const handler: Handler = async (event) => {
 
   const location = event.queryStringParameters?.location?.trim();
   if (!location) return jsonRes(400, { error: "Pass ?location=..." });
+  const n = Math.max(1, Math.min(20, Number(event.queryStringParameters?.n ?? 6)));
 
-  const variants = [
-    `hotels in ${location}`,
-    `hotels ${location}`,
-    `${location} hotels`,
-    `best hotels in ${location}`,
-    `small hotels in ${location}`,
-    `hotels near ${location}`,
-  ];
-
+  const query = `hotels in ${location}`;
   const t0 = Date.now();
-  const batches = await Promise.all(variants.map((v) => placesTextSearch(apiKey, v, 3)));
+
+  // Run sequentially so each call is independent (parallel is fine too;
+  // sequential just makes the timing cleaner).
+  const calls: Place[][] = [];
+  for (let i = 0; i < n; i++) {
+    calls.push(await singleCall(apiKey, query));
+  }
   const elapsedMs = Date.now() - t0;
 
   const seen = new Set<string>();
-  const perQuery = variants.map((q, i) => {
-    const batch = batches[i];
+  const perCall = calls.map((batch, i) => {
     const newOnes = batch.filter((b) => !seen.has(b.place_id));
     for (const b of newOnes) seen.add(b.place_id);
     return {
-      query: q,
+      callIndex: i + 1,
       returned: batch.length,
       uniqueAdded: newOnes.length,
       newNames: newOnes.map((b) => b.name),
@@ -99,13 +77,18 @@ export const handler: Handler = async (event) => {
     };
   });
 
+  // Identical-order check: are all calls returning the exact same sequence?
+  const firstSig = calls[0].map((p) => p.place_id).join("|");
+  const allIdentical = calls.every((c) => c.map((p) => p.place_id).join("|") === firstSig);
+
   return jsonRes(200, {
-    location,
-    variants: variants.length,
-    totalCalls: batches.reduce((sum, b) => sum + Math.ceil(b.length / 20 || 1), 0),
+    query,
+    n,
+    totalCalls: n,
     totalUnique: seen.size,
-    totalReturned: batches.reduce((s, b) => s + b.length, 0),
+    totalReturned: calls.reduce((s, b) => s + b.length, 0),
+    allCallsIdentical: allIdentical,
     elapsedMs,
-    perQuery,
+    perCall,
   });
 };
