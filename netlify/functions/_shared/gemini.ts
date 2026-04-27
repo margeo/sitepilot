@@ -16,6 +16,7 @@ export interface GroundedResponse {
   text: string;
   groundingSources: Array<{ title?: string; uri?: string; snippet?: string }>;
   model: string;
+  usage?: { input_tokens?: number; output_tokens?: number };
 }
 
 export function hasGemini(): boolean {
@@ -59,6 +60,11 @@ export async function callGemini(input: GroundedRequest): Promise<GroundedRespon
         groundingSupports?: Array<{ segment?: { text?: string } }>;
       };
     }>;
+    usageMetadata?: {
+      promptTokenCount?: number;
+      candidatesTokenCount?: number;
+      totalTokenCount?: number;
+    };
   };
   const parts = data.candidates?.[0]?.content?.parts ?? [];
   const text = parts.map((p) => p.text ?? "").join("");
@@ -71,5 +77,13 @@ export async function callGemini(input: GroundedRequest): Promise<GroundedRespon
     snippet: sourceSnippets[i],
   }));
 
-  return { text, groundingSources, model };
+  return {
+    text,
+    groundingSources,
+    model,
+    usage: {
+      input_tokens: data.usageMetadata?.promptTokenCount,
+      output_tokens: data.usageMetadata?.candidatesTokenCount,
+    },
+  };
 }

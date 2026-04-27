@@ -20,6 +20,11 @@ interface JobInput {
   };
 }
 
+interface PhaseUsage {
+  input_tokens?: number;
+  output_tokens?: number;
+}
+
 interface JobRecord {
   status: "pending" | "researching" | "designing" | "done" | "error";
   createdAt: number;
@@ -35,7 +40,7 @@ interface JobRecord {
     generated_by: string;
   };
   dossier?: unknown;
-  usage?: { input_tokens?: number; output_tokens?: number };
+  usage?: { research?: PhaseUsage; design?: PhaseUsage };
   elapsedMs?: { research?: number; design?: number; total?: number };
   error?: string;
 }
@@ -83,7 +88,7 @@ export default async (req: Request, _context: Context) => {
     }
 
     const researchStart = Date.now();
-    const { dossier } = await researchBusiness(business, researchModelId);
+    const { dossier, usage: researchUsage } = await researchBusiness(business, researchModelId);
     const researchMs = Date.now() - researchStart;
 
     await writeJob(jobId, {
@@ -91,6 +96,7 @@ export default async (req: Request, _context: Context) => {
       status: "designing",
       updatedAt: Date.now(),
       dossier,
+      usage: { research: researchUsage },
       elapsedMs: { research: researchMs },
     });
 
@@ -118,7 +124,7 @@ export default async (req: Request, _context: Context) => {
       status: "done",
       updatedAt: Date.now(),
       dossier,
-      usage: design.usage,
+      usage: { research: researchUsage, design: design.usage },
       elapsedMs: {
         research: researchMs,
         design: design.elapsedMs,

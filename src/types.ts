@@ -159,7 +159,10 @@ export interface JobRecord {
   businessName: string;
   site?: GeneratedSite;
   dossier?: unknown;
-  usage?: { input_tokens?: number; output_tokens?: number };
+  usage?: {
+    research?: { input_tokens?: number; output_tokens?: number };
+    design?: { input_tokens?: number; output_tokens?: number };
+  };
   elapsedMs?: { research?: number; design?: number; total?: number };
   error?: string;
 }

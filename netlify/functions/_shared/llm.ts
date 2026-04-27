@@ -42,12 +42,12 @@ export async function callDesigner(input: DesignerInput): Promise<LLMResult> {
   if (provider === "openrouter") {
     const key = process.env.OPENROUTER_API_KEY;
     if (!key) throw new Error("OPENROUTER_API_KEY not set");
-    const text = await callOpenRouter(key, model, {
+    const r = await callOpenRouter(key, model, {
       system: input.system,
       user: input.user,
       maxTokens: input.maxTokens,
     });
-    return { text, provider: "openrouter", model };
+    return { text: r.text, provider: "openrouter", model, usage: r.usage };
   }
   if (provider === "anthropic") {
     const key = process.env.ANTHROPIC_API_KEY;
@@ -131,8 +131,8 @@ export async function callLLM(input: LLMInput): Promise<LLMResult> {
   const orKey = process.env.OPENROUTER_API_KEY;
   if (orKey) {
     const model = process.env.OPENROUTER_MODEL || DEFAULT_OR_MODEL;
-    const text = await callOpenRouter(orKey, model, input);
-    return { text, provider: "openrouter", model };
+    const r = await callOpenRouter(orKey, model, input);
+    return { text: r.text, provider: "openrouter", model, usage: r.usage };
   }
   const anthKey = process.env.ANTHROPIC_API_KEY;
   if (anthKey) {
@@ -143,7 +143,11 @@ export async function callLLM(input: LLMInput): Promise<LLMResult> {
   throw new Error("No LLM provider configured (set OPENROUTER_API_KEY or ANTHROPIC_API_KEY)");
 }
 
-async function callOpenRouter(key: string, model: string, input: LLMInput): Promise<string> {
+async function callOpenRouter(
+  key: string,
+  model: string,
+  input: LLMInput,
+): Promise<{ text: string; usage?: { input_tokens?: number; output_tokens?: number } }> {
   const userContent: Array<Record<string, unknown>> = [{ type: "text", text: input.user }];
   for (const img of input.images ?? []) {
     userContent.push({ type: "image_url", image_url: { url: img } });
@@ -171,10 +175,17 @@ async function callOpenRouter(key: string, model: string, input: LLMInput): Prom
   }
   const data = (await res.json()) as {
     choices?: Array<{ message?: { content?: string } }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
   const text = data.choices?.[0]?.message?.content ?? "";
   if (!text) throw new Error("OpenRouter returned empty content");
-  return text;
+  return {
+    text,
+    usage: {
+      input_tokens: data.usage?.prompt_tokens,
+      output_tokens: data.usage?.completion_tokens,
+    },
+  };
 }
 
 async function callAnthropic(key: string, model: string, input: LLMInput): Promise<string> {

@@ -150,7 +150,7 @@ function parseTolerantJson<T>(raw: string): T {
 async function researchViaGeminiDirect(
   business: ResearchBusiness,
   model: string,
-): Promise<{ dossier: Dossier; model: string }> {
+): Promise<{ dossier: Dossier; model: string; usage?: { input_tokens?: number; output_tokens?: number } }> {
   const result = await callGemini({
     model,
     systemInstruction: SYSTEM_PROMPT,
@@ -169,7 +169,7 @@ async function researchViaGeminiDirect(
       .filter((s) => s.uri)
       .map((s) => ({ title: s.title, uri: s.uri }));
   }
-  return { dossier, model: result.model };
+  return { dossier, model: result.model, usage: result.usage };
 }
 
 // ---- OpenRouter with :online suffix (OpenRouter's Exa-backed web search) -
@@ -177,7 +177,7 @@ async function researchViaGeminiDirect(
 async function researchViaOpenRouter(
   business: ResearchBusiness,
   openrouterSlug: string, // e.g. "google/gemini-3.1-flash-lite-preview"
-): Promise<{ dossier: Dossier; model: string }> {
+): Promise<{ dossier: Dossier; model: string; usage?: { input_tokens?: number; output_tokens?: number } }> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) throw new Error("OPENROUTER_API_KEY not set");
   const model = `${openrouterSlug}:online`;
@@ -209,6 +209,7 @@ async function researchViaOpenRouter(
         annotations?: Array<{ type?: string; url_citation?: { url?: string; title?: string } }>;
       };
     }>;
+    usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
   const text = data.choices?.[0]?.message?.content ?? "";
   if (!text) throw new Error("Research (OpenRouter :online) returned empty content");
@@ -225,7 +226,11 @@ async function researchViaOpenRouter(
       .map((a) => ({ title: a.url_citation?.title, uri: a.url_citation?.url }));
     if (sources.length) dossier.sources = sources;
   }
-  return { dossier, model };
+  return {
+    dossier,
+    model,
+    usage: { input_tokens: data.usage?.prompt_tokens, output_tokens: data.usage?.completion_tokens },
+  };
 }
 
 // ---- Anthropic direct with web_search tool -------------------------------
@@ -233,7 +238,7 @@ async function researchViaOpenRouter(
 async function researchViaAnthropic(
   business: ResearchBusiness,
   model: string,
-): Promise<{ dossier: Dossier; model: string }> {
+): Promise<{ dossier: Dossier; model: string; usage?: { input_tokens?: number; output_tokens?: number } }> {
   const key = process.env.ANTHROPIC_API_KEY;
   if (!key) throw new Error("ANTHROPIC_API_KEY not set — required for Claude research path");
   const client = new Anthropic({ apiKey: key });
@@ -248,6 +253,7 @@ async function researchViaAnthropic(
 
   const msg = (await client.messages.create(body)) as {
     content: Array<{ type: string; text?: string; citations?: Array<{ url?: string; title?: string }> }>;
+    usage?: { input_tokens?: number; output_tokens?: number };
   };
 
   const text = msg.content
@@ -264,7 +270,11 @@ async function researchViaAnthropic(
   if (!jsonStr) throw new Error(`Research (Anthropic): no JSON. Raw: ${text.slice(0, 400)}`);
   const dossier = parseTolerantJson<Dossier>(jsonStr);
   if (!dossier.sources?.length && citations.length > 0) dossier.sources = citations;
-  return { dossier, model };
+  return {
+    dossier,
+    model,
+    usage: { input_tokens: msg.usage?.input_tokens, output_tokens: msg.usage?.output_tokens },
+  };
 }
 
 // ---- Public entrypoint ---------------------------------------------------
@@ -272,7 +282,7 @@ async function researchViaAnthropic(
 export async function researchBusiness(
   business: ResearchBusiness,
   researchModelId?: string,
-): Promise<{ dossier: Dossier; model: string }> {
+): Promise<{ dossier: Dossier; model: string; usage?: { input_tokens?: number; output_tokens?: number } }> {
   if (!researchModelId) {
     return researchViaGeminiDirect(business, "gemini-2.5-flash");
   }

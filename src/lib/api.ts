@@ -102,6 +102,19 @@ export async function generateSite(
     const record = await getJobStatus(jobId);
     onTick?.(record);
     if (record.status === "done" || record.status === "error") {
+      if (record.status === "done") {
+        const r = record.usage?.research;
+        const d = record.usage?.design;
+        const total =
+          (r?.input_tokens ?? 0) + (r?.output_tokens ?? 0) +
+          (d?.input_tokens ?? 0) + (d?.output_tokens ?? 0);
+        console.log("[generate] tokens", {
+          research: r ? `${r.input_tokens ?? 0} in / ${r.output_tokens ?? 0} out` : "n/a",
+          design: d ? `${d.input_tokens ?? 0} in / ${d.output_tokens ?? 0} out` : "n/a",
+          total,
+          elapsedMs: record.elapsedMs,
+        });
+      }
       return { jobId, record };
     }
   }
