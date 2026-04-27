@@ -1,8 +1,10 @@
-// TEMPORARY test endpoint. Fires the SAME query N times back-to-back (fresh
-// page 1 each time, no pageToken) to see whether Google returns variation
-// across identical calls. Hypothesis: deterministic — same 20 every time.
+// TEMPORARY test endpoint. Two paginated queries side-by-side:
+//   1) "hotels in <location>"        × 3 pages
+//   2) "vacation rentals in <location>" × 3 pages
+// Reports per-query uniqueAdded + names so we can see whether different
+// query keywords pull genuinely different places out of Google's index.
 //
-// Usage: GET /.netlify/functions/search-test?location=Symi%2C%20Greece&n=6
+// Usage: GET /.netlify/functions/search-test?location=Symi%2C%20Greece
 
 import type { Handler } from "@netlify/functions";
 
@@ -13,28 +15,42 @@ interface Place {
   name: string;
 }
 
-async function singleCall(apiKey: string, textQuery: string): Promise<Place[]> {
-  const res = await fetch(PLACES_URL, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "X-Goog-Api-Key": apiKey,
-      "X-Goog-FieldMask": "places.id,places.displayName",
-    },
-    body: JSON.stringify({ textQuery, pageSize: 20 }),
-  });
-  if (!res.ok) {
-    const t = await res.text().catch(() => "");
-    console.warn(`[search-test] ${res.status}: ${t.slice(0, 200)}`);
-    return [];
+async function placesPaginated(
+  apiKey: string,
+  textQuery: string,
+  maxPages = 3,
+): Promise<Place[]> {
+  const all: Place[] = [];
+  let pageToken: string | undefined;
+  for (let page = 0; page < maxPages; page++) {
+    const body: Record<string, unknown> = { textQuery, pageSize: 20 };
+    if (pageToken) body.pageToken = pageToken;
+    const res = await fetch(PLACES_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-Goog-Api-Key": apiKey,
+        "X-Goog-FieldMask": "places.id,places.displayName,nextPageToken",
+      },
+      body: JSON.stringify(body),
+    });
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      console.warn(`[search-test] ${res.status} on "${textQuery}" p${page + 1}: ${t.slice(0, 200)}`);
+      return all;
+    }
+    const data = (await res.json()) as {
+      places?: Array<{ id: string; displayName?: { text?: string } }>;
+      nextPageToken?: string;
+    };
+    for (const p of data.places ?? []) {
+      all.push({ place_id: p.id, name: p.displayName?.text ?? "" });
+    }
+    pageToken = data.nextPageToken;
+    if (!pageToken) break;
+    if (page < maxPages - 1) await new Promise((r) => setTimeout(r, 2000));
   }
-  const data = (await res.json()) as {
-    places?: Array<{ id: string; displayName?: { text?: string } }>;
-  };
-  return (data.places ?? []).map((p) => ({
-    place_id: p.id,
-    name: p.displayName?.text ?? "",
-  }));
+  return all;
 }
 
 function jsonRes(status: number, body: unknown) {
@@ -51,25 +67,24 @@ export const handler: Handler = async (event) => {
 
   const location = event.queryStringParameters?.location?.trim();
   if (!location) return jsonRes(400, { error: "Pass ?location=..." });
-  const n = Math.max(1, Math.min(20, Number(event.queryStringParameters?.n ?? 6)));
 
-  const query = `hotels in ${location}`;
+  const queries = [
+    `hotels in ${location}`,
+    `vacation rentals in ${location}`,
+  ];
+
   const t0 = Date.now();
-
-  // Run sequentially so each call is independent (parallel is fine too;
-  // sequential just makes the timing cleaner).
-  const calls: Place[][] = [];
-  for (let i = 0; i < n; i++) {
-    calls.push(await singleCall(apiKey, query));
-  }
+  const batches = await Promise.all(queries.map((q) => placesPaginated(apiKey, q, 3)));
   const elapsedMs = Date.now() - t0;
 
   const seen = new Set<string>();
-  const perCall = calls.map((batch, i) => {
+  const perQuery = queries.map((q, i) => {
+    const batch = batches[i];
     const newOnes = batch.filter((b) => !seen.has(b.place_id));
     for (const b of newOnes) seen.add(b.place_id);
     return {
-      callIndex: i + 1,
+      query: q,
+      paginatedCalls: Math.max(1, Math.ceil(batch.length / 20)),
       returned: batch.length,
       uniqueAdded: newOnes.length,
       newNames: newOnes.map((b) => b.name),
@@ -77,18 +92,12 @@ export const handler: Handler = async (event) => {
     };
   });
 
-  // Identical-order check: are all calls returning the exact same sequence?
-  const firstSig = calls[0].map((p) => p.place_id).join("|");
-  const allIdentical = calls.every((c) => c.map((p) => p.place_id).join("|") === firstSig);
-
   return jsonRes(200, {
-    query,
-    n,
-    totalCalls: n,
+    location,
+    queries: queries.length,
     totalUnique: seen.size,
-    totalReturned: calls.reduce((s, b) => s + b.length, 0),
-    allCallsIdentical: allIdentical,
+    totalReturned: batches.reduce((s, b) => s + b.length, 0),
     elapsedMs,
-    perCall,
+    perQuery,
   });
 };
