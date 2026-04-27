@@ -325,6 +325,7 @@ export const handler: Handler = async (event) => {
   try {
     const cfg = SECTOR_CONFIG[sector];
     let raw: Basic[];
+    const debug: Record<string, unknown> = { mode: searchDepth };
 
     if (searchDepth === "deep") {
       // Deep: multiple phrasings, no type filter, paginate up to 3 pages each. Broad discovery.
@@ -335,11 +336,14 @@ export const handler: Handler = async (event) => {
       const byId = new Map<string, Basic>();
       for (const list of batches) for (const b of list) byId.set(b.place_id, b);
       raw = Array.from(byId.values());
+      debug.queries = queries;
+      debug.totalRaw = raw.length;
       // Post-filter 1: sector's primary-type whitelist so broad text queries
       // ("hotels in Symi") don't bleed other categories in (a restaurant
       // named "Hotel X", a shop named "Villa Y", etc.).
       const whitelist = new Set(cfg.includedTypes);
       raw = raw.filter((r) => (r.types ?? []).some((t) => whitelist.has(t)));
+      debug.afterTypeWhitelist = raw.length;
       // Post-filter 2: geographic — Google's text search is not location-
       // strict and will happily return matching businesses from other
       // countries ("Symi" in Greece can yield results in Mèze, France).
@@ -356,23 +360,30 @@ export const handler: Handler = async (event) => {
           return locTokens.some((t) => addr.includes(t));
         });
       }
+      debug.afterLocationFilter = raw.length;
     } else {
-      // Quick: single focused phrase, per-type strict filtering, 1 page. Fast.
+      // Quick: single broad phrase, NO type filter, 2 pages (max 40), then
+      // post-filter by type whitelist (any-of) + location tokens. Same
+      // post-filter logic as deep — just one query instead of 23.
       const quickQuery = `${cfg.quickQueries[0]} in ${location}`;
-      const batches = await Promise.all(
-        cfg.includedTypes.map((t) =>
-          placesTextSearch({
-            apiKey,
-            textQuery: quickQuery,
-            includedType: t,
-            strictTypeFiltering: true,
-            maxPages: 1,
-          }),
-        ),
-      );
-      const byId = new Map<string, Basic>();
-      for (const list of batches) for (const b of list) byId.set(b.place_id, b);
-      raw = Array.from(byId.values());
+      raw = await placesTextSearch({ apiKey, textQuery: quickQuery, maxPages: 2 });
+      debug.queries = [quickQuery];
+      debug.totalRaw = raw.length;
+      const whitelist = new Set(cfg.includedTypes);
+      raw = raw.filter((r) => (r.types ?? []).some((t) => whitelist.has(t)));
+      debug.afterTypeWhitelist = raw.length;
+      const locTokens = location
+        .toLowerCase()
+        .split(/[,/]/)
+        .map((s) => s.trim())
+        .filter((s) => s.length > 2);
+      if (locTokens.length > 0) {
+        raw = raw.filter((r) => {
+          const addr = (r.address || "").toLowerCase();
+          return locTokens.some((t) => addr.includes(t));
+        });
+      }
+      debug.afterLocationFilter = raw.length;
     }
 
     const totalFound = raw.length;
@@ -383,8 +394,9 @@ export const handler: Handler = async (event) => {
       .filter((r) => (r.user_ratings_total ?? 0) >= minReviews)
       .filter((r) => r.business_status !== "CLOSED_PERMANENTLY")
       .slice(0, maxResults);
+    debug.afterFinalFilters = results.length;
 
-    return jsonRes(200, { businesses: results, demo: false, totalFound, searchDepth });
+    return jsonRes(200, { businesses: results, demo: false, totalFound, searchDepth, _debug: debug });
   } catch (err) {
     return jsonRes(500, {
       error: err instanceof Error ? err.message : String(err),

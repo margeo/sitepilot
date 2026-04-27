@@ -36,10 +36,18 @@ export interface SearchResponse {
   demo: boolean;
   note?: string;
   totalFound?: number;
+  _debug?: Record<string, unknown>;
 }
 
-export function searchBusinesses(filters: SearchFilters): Promise<SearchResponse> {
-  return post<SearchResponse>("search-businesses", filters);
+export async function searchBusinesses(filters: SearchFilters): Promise<SearchResponse> {
+  console.log("[search] →", filters);
+  const res = await post<SearchResponse>("search-businesses", filters);
+  console.log("[search] ←", {
+    matches: res.businesses.length,
+    totalFound: res.totalFound,
+    debug: res._debug,
+  });
+  return res;
 }
 
 export interface DetailsResponse {
