@@ -206,6 +206,13 @@ function jsonRes(statusCode: number, body: unknown) {
 
 const PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
 
+interface PlacesError {
+  query: string;
+  page: number;
+  status: number;
+  message: string;
+}
+
 // Single call (or paginated chain) to Places Text Search.
 // If `includedType` is undefined, we search broadly (no type filter, no strict).
 // maxPages caps the pagination; Google requires a short wait between page fetches
@@ -216,8 +223,9 @@ async function placesTextSearch(args: {
   includedType?: string;
   strictTypeFiltering?: boolean;
   maxPages?: number;
+  errors?: PlacesError[];
 }): Promise<Basic[]> {
-  const { apiKey, textQuery, includedType, strictTypeFiltering = false, maxPages = 1 } = args;
+  const { apiKey, textQuery, includedType, strictTypeFiltering = false, maxPages = 1, errors } = args;
   const all: Basic[] = [];
   let pageToken: string | undefined;
 
@@ -244,6 +252,10 @@ async function placesTextSearch(args: {
     });
     if (!res.ok) {
       // Don't fail the whole search if one query errors — just skip this query.
+      const body = await res.text().catch(() => "");
+      const message = body.slice(0, 300) || res.statusText;
+      console.warn(`[places] ${res.status} on "${textQuery}" page ${page + 1}: ${message}`);
+      errors?.push({ query: textQuery, page: page + 1, status: res.status, message });
       return all;
     }
     const data = (await res.json()) as {
@@ -327,11 +339,12 @@ export const handler: Handler = async (event) => {
     let raw: Basic[];
     const debug: Record<string, unknown> = { mode: searchDepth };
 
+    const errors: PlacesError[] = [];
     if (searchDepth === "deep") {
       // Deep: multiple phrasings, no type filter, paginate up to 3 pages each. Broad discovery.
       const queries = cfg.deepQueries.map((q) => `${q} in ${location}`);
       const batches = await Promise.all(
-        queries.map((q) => placesTextSearch({ apiKey, textQuery: q, maxPages: 3 })),
+        queries.map((q) => placesTextSearch({ apiKey, textQuery: q, maxPages: 3, errors })),
       );
       const byId = new Map<string, Basic>();
       for (const list of batches) for (const b of list) byId.set(b.place_id, b);
@@ -380,7 +393,7 @@ export const handler: Handler = async (event) => {
       // post-filter by type whitelist (any-of) + location tokens. Same
       // post-filter logic as deep — just one query instead of 23.
       const quickQuery = `${cfg.quickQueries[0]} in ${location}`;
-      raw = await placesTextSearch({ apiKey, textQuery: quickQuery, maxPages: 2 });
+      raw = await placesTextSearch({ apiKey, textQuery: quickQuery, maxPages: 2, errors });
       debug.perQuery = [{
         query: quickQuery,
         returned: raw.length,
@@ -414,6 +427,8 @@ export const handler: Handler = async (event) => {
       .filter((r) => r.business_status !== "CLOSED_PERMANENTLY")
       .slice(0, maxResults);
     debug.afterFinalFilters = results.length;
+    debug.errorCount = errors.length;
+    debug.errors = errors;
 
     return jsonRes(200, { businesses: results, demo: false, totalFound, searchDepth, _debug: debug });
   } catch (err) {
