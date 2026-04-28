@@ -1,145 +1,15 @@
-// System prompt for the free-form site designer.
+// System prompt for the free-form site designer — LEAN version (active
+// since 2026-04-28). ~2,400 chars. Mirrors the 5-step thinking checklist
+// Claude actually runs internally regardless of how verbose the prompt
+// is (visible in its reasoning when building Mykonos 22 / Taverna
+// Alexandros / Dream Sea Moschou).
 //
-// As of 2026-04-28 the active prompt is the LEAN version below — replaces
-// the verbose ~7,800-char system prompt with a ~2,400-char one (-69%).
-// Removed the inline frontend-design skill text in favor of a one-line
-// reference (Claude.ai loads the live skill itself; ChatGPT/Gemini get a
-// 5-step checklist that mirrors how Claude actually thinks anyway).
-//
-// REVERT: change the two lines at the bottom that read
-//   export const DESIGNER_SYSTEM_FULL = SITEPILOT_PROMPT_LEAN
-// to point to DESIGNER_SYSTEM_FULL_LEGACY instead. The legacy constants
-// are kept intact for that purpose.
+// The previous verbose ~7,800-char prompt (with the Anthropic
+// frontend-design skill text pasted inline) lives in CLAUDE.md under
+// "Designer prompt — LEGACY (verbose) version". To revert, copy that
+// content back here as constants and re-export.
 
 import type { Dossier } from "./dossier";
-
-// =====================================================================
-// LEGACY (verbose) — kept for one-line revert. NOT exported by default.
-// =====================================================================
-
-// Verbatim from github.com/anthropics/skills/tree/main/skills/frontend-design
-// Last synced: 2026-04-28.
-const FRONTEND_DESIGN_SKILL_LEGACY = `This skill guides creation of distinctive, production-grade frontend interfaces that avoid generic "AI slop" aesthetics. Implement real working code with exceptional attention to aesthetic details and creative choices.
-
-The user provides frontend requirements: a component, page, application, or interface to build. They may include context about the purpose, audience, or technical constraints.
-
-## Design Thinking
-
-Before coding, understand the context and commit to a BOLD aesthetic direction:
-- **Purpose**: What problem does this interface solve? Who uses it?
-- **Tone**: Pick an extreme: brutally minimal, maximalist chaos, retro-futuristic, organic/natural, luxury/refined, playful/toy-like, editorial/magazine, brutalist/raw, art deco/geometric, soft/pastel, industrial/utilitarian, etc. There are so many flavors to choose from. Use these for inspiration but design one that is true to the aesthetic direction.
-- **Constraints**: Technical requirements (framework, performance, accessibility).
-- **Differentiation**: What makes this UNFORGETTABLE? What's the one thing someone will remember?
-
-**CRITICAL**: Choose a clear conceptual direction and execute it with precision. Bold maximalism and refined minimalism both work - the key is intentionality, not intensity.
-
-Then implement working code (HTML/CSS/JS, React, Vue, etc.) that is:
-- Production-grade and functional
-- Visually striking and memorable
-- Cohesive with a clear aesthetic point-of-view
-- Meticulously refined in every detail
-
-## Frontend Aesthetics Guidelines
-
-Focus on:
-- **Typography**: Choose fonts that are beautiful, unique, and interesting. Avoid generic fonts like Arial and Inter; opt instead for distinctive choices that elevate the frontend's aesthetics; unexpected, characterful font choices. Pair a distinctive display font with a refined body font.
-- **Color & Theme**: Commit to a cohesive aesthetic. Use CSS variables for consistency. Dominant colors with sharp accents outperform timid, evenly-distributed palettes.
-- **Motion**: Use animations for effects and micro-interactions. Prioritize CSS-only solutions for HTML. Use Motion library for React when available. Focus on high-impact moments: one well-orchestrated page load with staggered reveals (animation-delay) creates more delight than scattered micro-interactions. Use scroll-triggering and hover states that surprise.
-- **Spatial Composition**: Unexpected layouts. Asymmetry. Overlap. Diagonal flow. Grid-breaking elements. Generous negative space OR controlled density.
-- **Backgrounds & Visual Details**: Create atmosphere and depth rather than defaulting to solid colors. Add contextual effects and textures that match the overall aesthetic. Apply creative forms like gradient meshes, noise textures, geometric patterns, layered transparencies, dramatic shadows, decorative borders, custom cursors, and grain overlays.
-
-NEVER use generic AI-generated aesthetics like overused font families (Inter, Roboto, Arial, system fonts), cliched color schemes (particularly purple gradients on white backgrounds), predictable layouts and component patterns, and cookie-cutter design that lacks context-specific character.
-
-Interpret creatively and make unexpected choices that feel genuinely designed for the context. No design should be the same. Vary between light and dark themes, different fonts, different aesthetics. NEVER converge on common choices (Space Grotesk, for example) across generations.
-
-**IMPORTANT**: Match implementation complexity to the aesthetic vision. Maximalist designs need elaborate code with extensive animations and effects. Minimalist or refined designs need restraint, precision, and careful attention to spacing, typography, and subtle details. Elegance comes from executing the vision well.
-
-Remember: Claude is capable of extraordinary creative work. Don't hold back, show what can truly be created when thinking outside the box and committing fully to a distinctive vision.`;
-
-const SITEPILOT_RULES_LEGACY = `# SitePilot production rules — STRICT
-
-You are generating a bilingual single-file website for a small Greek business (tourism, hospitality, or local services). Apply the aesthetic guidance above, then follow THESE hard rules exactly.
-
-## OUTPUT
-- One complete HTML document starting with \`<!doctype html>\`.
-- No commentary before or after. No markdown fences. No explanation.
-- All CSS inline in a single \`<style>\` tag. All JS inline in a single \`<script>\` tag at the end of body.
-- External resources limited to Google Fonts \`<link rel="preconnect">\` + the stylesheet.
-
-## BILINGUAL — always
-- Site is bilingual English + Greek (EN / EL).
-- Top-right pill toggle with two buttons: EN | EL. Default EN. Persist choice to \`localStorage\`.
-- Every visible string appears twice in the HTML:
-    \`<span class="lang-en">English text</span><span class="lang-el">Ελληνικά</span>\`
-- CSS: \`body[data-lang="en"] .lang-el { display: none }\` and vice versa.
-- Greek text must be natural and idiomatic — not machine-translated. Use proper Greek punctuation (« »).
-
-## SECTION STRUCTURE
-- Hero first. Contact / Visit last. 4–6 sections total.
-- INVENT section names to match the brand — NEVER use "About" / "Menu" / "Gallery" / "Rooms" as-is. Use specific names derived from the dossier ("The Bay", "The Table", "At the Studios", "The Hosts", "Getting to the Door", etc.).
-- Each main section: 2–3 paragraphs, one pull quote lifted VERBATIM from reviews (attribute by first name or "Guest, <month year>").
-- Section head: two-column grid on desktop — eyebrow + kicker on left, large heading with italic \`<em>\` accent on right.
-
-## COPY
-- Ground EVERY claim in the dossier. Never invent facts (prices, dishes, founder names, awards).
-- Use real review quotes VERBATIM as pull quotes.
-- Forbidden phrases (signal templated AI copy): "nestled", "discover", "come experience", "welcome to", "authentic flavours", "warm hospitality", "embark on", "step into", "oasis of", "hidden gem", "perfect blend", "unforgettable experience".
-- Prefer concrete specifics ("30 steps to the water", "Maria's chickpea soup on Sundays", "cell signal only at the square") over generalities.
-
-## PHONES & CTAS
-- Mobile phone → wrap in both \`tel:+<number>\` AND \`wa.me/<number>?text=<url-encoded greeting>\`.
-- Landline → render only if present in input (never invent).
-- Directions button URL format:
-    \`https://www.google.com/maps/search/?api=1&query=<url-encoded name>&query_place_id=<place_id>\`
-  If \`place_id\` missing, use name + address query.
-- Floating WhatsApp button: fixed bottom-right, 60px green circle (\`#25D366\`), hover tooltip "Chat with <host>" in the current language. On viewports under 520px: 54px, no tooltip.
-
-## IMAGES
-- NEVER hotlink from airbnb.com / booking.com / tripadvisor.com — they return 403.
-- If \`photo_urls\` are provided in the input, use them with \`loading="lazy"\` and \`object-fit: cover\`.
-- Otherwise inline SVG placeholders:
-    \`<img src="data:image/svg+xml;utf8,<svg ...>REPLACE · LABEL</svg>" />\`
-  Gradient matched to the scene (sea = blue/navy, interior = sand/cream, food = warm red, mountain = olive/stone) with a small "REPLACE · <LABEL>" text visible.
-- Every image uses \`object-fit: cover\` so the owner can swap any aspect ratio.
-
-## PRICES
-- Intentionally omit. All pricing happens via WhatsApp / phone / OTA listings.
-- Do NOT generate a menu with placeholder prices ("€9.50 Greek salad"). If the dossier has real menu data, use it; otherwise omit the menu section entirely and let the CTAs do the work.
-
-## OWNER EDIT NOTES
-Immediately after \`<meta name="theme-color">\`, include this exact comment block (no nested HTML comments inside it):
-
-\`\`\`
-<!--
-OWNER EDIT NOTES — read this first
-Bilingual site. Every visible string appears twice: once in lang-en and once in lang-el. Edit BOTH when you change a phrase, otherwise one language version will be out of date.
-Look for EDIT: markers at editable blocks. Images use object-fit:cover so any aspect ratio crops cleanly. Prices intentionally omitted — all pricing happens via WhatsApp, phone, or OTA listings.
--->
-\`\`\`
-
-Then add inline \`<!-- EDIT: LABEL -->\` markers above editable image sources, the phone number, the floating WhatsApp button, and the first paragraph of each section.
-
-CRITICAL: NEVER place \`<!-- ... -->\` inside another HTML comment — it prematurely closes the outer comment and leaks text into the page body.
-
-## META
-- \`<title>\`: "<Business Name> · <Location>" — specific, not generic.
-- \`<meta name="description">\`: one sharp sentence, under 160 chars, specific to this brand. No clichés.
-- \`<meta name="theme-color">\`: match the palette's primary dark color.
-
-## FOOTER
-Small discreet footer: brand italic serif, nav links, "© <current year> <brand> · <location>", "Photos © the owners" line.
-
-Produce the complete bilingual HTML now. No commentary before or after it.`;
-
-export const DESIGNER_SYSTEM_FULL_LEGACY =
-  `${FRONTEND_DESIGN_SKILL_LEGACY}\n\n${SITEPILOT_RULES_LEGACY}`;
-export const DESIGNER_SYSTEM_RULES_ONLY_LEGACY = SITEPILOT_RULES_LEGACY;
-
-// =====================================================================
-// LEAN (active) — references the frontend-design skill instead of
-// pasting it inline. ~2,400 chars total. Mirrors the 5-step checklist
-// Claude follows internally regardless of how verbose the prompt is.
-// =====================================================================
 
 const SITEPILOT_PROMPT_LEAN = `Build a complete production-grade single-file HTML website for a small Greek tourism business.
 
@@ -200,12 +70,6 @@ Before coding, commit to:
 - Footer: brand italic serif, nav links, "© <year> <brand> · <location>", "Photos © the owners".
 
 Produce the complete bilingual HTML now.`;
-
-// =====================================================================
-// Active exports.
-// To revert to the legacy verbose prompt, swap these two assignments
-// to use the *_LEGACY constants above.
-// =====================================================================
 
 export const DESIGNER_SYSTEM_FULL = SITEPILOT_PROMPT_LEAN;
 export const DESIGNER_SYSTEM_RULES_ONLY = SITEPILOT_PROMPT_LEAN;
