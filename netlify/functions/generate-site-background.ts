@@ -14,6 +14,9 @@ interface JobInput {
   jobId: string;
   modelId: string;
   researchModelId?: string;
+  // When supplied, the research phase is skipped — this dossier is used
+  // directly as the input to design.
+  dossier?: unknown;
   business: DesignerBusiness & ResearchBusiness & {
     lead_score?: number;
     photo_refs?: string[];
@@ -71,14 +74,16 @@ export default async (req: Request, _context: Context) => {
     return new Response("Invalid JSON", { status: 400 });
   }
 
-  const { jobId, modelId, researchModelId, business } = input;
+  const { jobId, modelId, researchModelId, business, dossier: cachedDossier } = input;
   if (!jobId || !modelId || !business?.name) {
     return new Response("Missing jobId, modelId, or business.name", { status: 400 });
   }
+  const skipResearch =
+    cachedDossier !== undefined && cachedDossier !== null && typeof cachedDossier === "object";
 
   const t0 = Date.now();
   const base: JobRecord = {
-    status: "researching",
+    status: skipResearch ? "designing" : "researching",
     createdAt: t0,
     updatedAt: t0,
     modelId,
@@ -88,27 +93,36 @@ export default async (req: Request, _context: Context) => {
   await writeJob(jobId, base);
 
   try {
-    if (!hasGemini() && !process.env.ANTHROPIC_API_KEY) {
-      throw new Error("Neither GEMINI_API_KEY nor ANTHROPIC_API_KEY set — research cannot run");
+    let dossier: ReturnType<typeof JSON.parse>;
+    let actualResearchModel: string | undefined;
+    let researchUsage: PhaseUsage | undefined;
+    let researchMs = 0;
+
+    if (skipResearch) {
+      // Frontend passed a dossier from a prior Research click — use as-is,
+      // make zero AI calls in this phase.
+      dossier = cachedDossier;
+    } else {
+      if (!hasGemini() && !process.env.ANTHROPIC_API_KEY) {
+        throw new Error("Neither GEMINI_API_KEY nor ANTHROPIC_API_KEY set — research cannot run");
+      }
+      const researchStart = Date.now();
+      const r = await researchBusiness(business, researchModelId);
+      researchMs = Date.now() - researchStart;
+      dossier = r.dossier;
+      actualResearchModel = r.model;
+      researchUsage = r.usage;
+
+      await writeJob(jobId, {
+        ...base,
+        status: "designing",
+        updatedAt: Date.now(),
+        dossier,
+        actualResearchModel,
+        usage: { research: researchUsage },
+        elapsedMs: { research: researchMs },
+      });
     }
-
-    const researchStart = Date.now();
-    const {
-      dossier,
-      model: actualResearchModel,
-      usage: researchUsage,
-    } = await researchBusiness(business, researchModelId);
-    const researchMs = Date.now() - researchStart;
-
-    await writeJob(jobId, {
-      ...base,
-      status: "designing",
-      updatedAt: Date.now(),
-      dossier,
-      actualResearchModel,
-      usage: { research: researchUsage },
-      elapsedMs: { research: researchMs },
-    });
 
     const photoUrls = (business.photo_refs ?? []).slice(0, 10).map((r) => photoUrl(r, 1600));
     const designerBusiness: DesignerBusiness = {

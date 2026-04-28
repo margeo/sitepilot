@@ -70,6 +70,13 @@ export default function App() {
   const [selectedSite, setSelectedSite] = useState<GeneratedSite | null>(null);
   const [lastFilters, setLastFilters] = useState<SearchFilters | null>(null);
 
+  // Dossier cache: place_id -> dossier object. Filled by Research action.
+  // Site Generation reads from it and refuses to run if missing — keeps the
+  // research and design phases independent so each is one explicit click.
+  const [dossierByPlaceId, setDossierByPlaceId] = useState<Map<string, unknown>>(
+    () => new Map(),
+  );
+
   // Probe the backend once on mount to know whether we're in demo mode.
   useEffect(() => {
     fetch("/.netlify/functions/search-businesses", {
@@ -106,7 +113,7 @@ export default function App() {
 
   async function runResearch(b: BusinessBasic) {
     if (!researchModel) {
-      setError("Pick a research model from the sidebar before researching.");
+      setError("Pick a research model from the sidebar (section 2).");
       return;
     }
     setResearchingId(b.place_id);
@@ -114,7 +121,13 @@ export default function App() {
     try {
       // Enrich with place-details first so research has reviews / hours / etc.
       const { business } = await fetchDetails(b.place_id, b);
-      await researchBusiness(business, researchModel);
+      const r = await researchBusiness(business, researchModel);
+      // Cache the dossier so Generate site can skip its own research call.
+      setDossierByPlaceId((prev) => {
+        const next = new Map(prev);
+        next.set(b.place_id, r.dossier);
+        return next;
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -123,9 +136,14 @@ export default function App() {
   }
 
   async function buildSite(b: BusinessBasic) {
-    if (!researchModel || !designModel) {
+    if (!designModel) {
+      setError("Pick a design model from the sidebar (section 3).");
+      return;
+    }
+    const cachedDossier = dossierByPlaceId.get(b.place_id);
+    if (!cachedDossier) {
       setError(
-        "Pick both a research model and a design model from the sidebar before generating.",
+        `No dossier for "${b.name}". Click Research on this row first — site generation uses the dossier from that step.`,
       );
       return;
     }
@@ -139,9 +157,15 @@ export default function App() {
     }, 500);
     try {
       const { business } = await fetchDetails(b.place_id, b);
-      const { record } = await generateSite(business, designModel, researchModel, (rec) => {
-        setGenerationStatus(rec.status);
-      });
+      const { record } = await generateSite(
+        business,
+        designModel,
+        researchModel, // still recorded, but research call is skipped server-side
+        (rec) => {
+          setGenerationStatus(rec.status);
+        },
+        { dossier: cachedDossier },
+      );
       if (record.status === "error") {
         throw new Error(record.error || "Generation failed");
       }

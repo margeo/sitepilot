@@ -28,6 +28,10 @@ interface Body {
   };
   modelId?: string;
   researchModelId?: string;
+  // When supplied, the background fn skips the research call entirely and
+  // uses this dossier as-is. Sent by the frontend after a prior Research
+  // click cached the dossier client-side.
+  dossier?: unknown;
 }
 
 export default async (req: Request, _context: Context) => {
@@ -52,11 +56,22 @@ export default async (req: Request, _context: Context) => {
       { status: 400 },
     );
   }
-  if (!body.researchModelId || !ALLOWED_MODELS.has(body.researchModelId)) {
-    return Response.json(
-      { error: "Valid researchModelId is required (pick a research model in the UI)" },
-      { status: 400 },
-    );
+  // researchModelId is required only when no dossier is supplied. With a
+  // pre-computed dossier from a prior Research click, the background fn
+  // skips research entirely so the model id doesn't matter.
+  const dossier = body.dossier;
+  const hasDossier =
+    dossier !== undefined && dossier !== null && typeof dossier === "object";
+  if (!hasDossier) {
+    if (!body.researchModelId || !ALLOWED_MODELS.has(body.researchModelId)) {
+      return Response.json(
+        {
+          error:
+            "Valid researchModelId is required when no dossier is supplied (pick a research model in the UI, or run Research first to cache a dossier)",
+        },
+        { status: 400 },
+      );
+    }
   }
 
   const modelId = body.modelId;
@@ -90,7 +105,7 @@ export default async (req: Request, _context: Context) => {
     const res = await fetch(bgUrl, {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ jobId, modelId, researchModelId, business }),
+      body: JSON.stringify({ jobId, modelId, researchModelId, business, dossier }),
     });
     if (res.status !== 202 && res.status !== 200) {
       const txt = await res.text();

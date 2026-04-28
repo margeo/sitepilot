@@ -136,158 +136,185 @@ export function SearchForm({
 
   return (
     <form onSubmit={submit} className="form-grid">
-      <div>
-        <label htmlFor="sector">Sector</label>
-        <select
-          id="sector"
-          value={sector}
-          onChange={(e) => setSector(e.target.value as Sector)}
-          style={{ width: "100%" }}
-        >
-          {SECTORS.map((s) => (
-            <option key={s.value} value={s.value}>
-              {s.label}
-            </option>
-          ))}
-        </select>
-      </div>
-
-      <div ref={wrapperRef} style={{ position: "relative" }}>
-        <label htmlFor="location">Location</label>
-        <input
-          id="location"
-          value={location}
-          onChange={(e) => {
-            setLocation(e.target.value);
-            setShowDropdown(true);
-          }}
-          onFocus={() => setShowDropdown(true)}
-          onKeyDown={onKeyDown}
-          placeholder="e.g. Paros, Greece · Santorini · Mykonos town"
-          style={{
-            width: "100%",
-            borderColor: locationCheck.ok ? undefined : "var(--danger)",
-          }}
-          autoComplete="off"
-          spellCheck={false}
-        />
-        {showDropdown && suggestions.length > 0 && (
-          <ul
-            style={{
-              position: "absolute",
-              top: "100%",
-              left: 0,
-              right: 0,
-              marginTop: 4,
-              listStyle: "none",
-              padding: 4,
-              background: "var(--bg-elev, #1a1a1a)",
-              border: "1px solid var(--border, #333)",
-              borderRadius: 6,
-              maxHeight: 280,
-              overflowY: "auto",
-              zIndex: 20,
-              boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
-            }}
-          >
-            {suggestions.map((s, idx) => (
-              <li
-                key={s.placeId}
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                  pickSuggestion(s);
-                }}
-                onMouseEnter={() => setActiveIndex(idx)}
-                style={{
-                  padding: "8px 10px",
-                  cursor: "pointer",
-                  borderRadius: 4,
-                  background: idx === activeIndex ? "var(--bg-hover, #2a2a2a)" : "transparent",
-                }}
-              >
-                <div style={{ fontSize: 14 }}>{s.mainText}</div>
-                {s.secondaryText && (
-                  <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
-                    {s.secondaryText}
-                  </div>
-                )}
-              </li>
-            ))}
-          </ul>
-        )}
-        {!locationCheck.ok && (
-          <div style={{ color: "var(--danger)", fontSize: 11, marginTop: 4 }}>
-            {locationCheck.hint}
-          </div>
-        )}
-        {locationCheck.ok && demoMode && (
-          <div style={{ color: "var(--warn)", fontSize: 11, marginTop: 4 }}>
-            ⚠︎ Demo mode: location is not actually searched. Add{" "}
-            <code>GOOGLE_MAPS_API_KEY</code> to <code>.env</code> for real results.
-          </div>
-        )}
-        {locationCheck.ok && !demoMode && (
-          <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 4 }}>
-            Google Places will be queried with “{location.trim()}”.
-          </div>
-        )}
-      </div>
-
+      {/* ── 1. Search ────────────────────────────────────────────────── */}
       <div className="filter-card">
-        <h3>Selection rules</h3>
-
-        <label className="checkbox-row">
-          <input
-            type="checkbox"
-            checked={noWebsiteOnly}
-            onChange={(e) => setNoWebsiteOnly(e.target.checked)}
-          />
-          Only businesses without a website
-        </label>
-
-        <div className="form-row" style={{ marginTop: 10 }}>
-          <div>
-            <label htmlFor="minRating">Min rating</label>
-            <input
-              id="minRating"
-              type="number"
-              step={0.1}
-              min={0}
-              max={5}
-              value={minRating}
-              onChange={(e) => setMinRating(Number(e.target.value))}
-              style={{ width: "100%" }}
-            />
-          </div>
-          <div>
-            <label htmlFor="minReviews">Min reviews</label>
-            <input
-              id="minReviews"
-              type="number"
-              min={0}
-              value={minReviews}
-              onChange={(e) => setMinReviews(Number(e.target.value))}
-              style={{ width: "100%" }}
-            />
-          </div>
+        <h3>1 · Search businesses</h3>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -4, marginBottom: 12 }}>
+          Google Places only — no AI. Returns candidate businesses for the chosen sector + location.
         </div>
 
-        <div style={{ marginTop: 10 }}>
-          <label htmlFor="maxResults">Max results</label>
-          <input
-            id="maxResults"
-            type="number"
-            min={1}
-            max={200}
-            value={maxResults}
-            onChange={(e) => setMaxResults(Number(e.target.value))}
+        <div>
+          <label htmlFor="sector">Sector</label>
+          <select
+            id="sector"
+            value={sector}
+            onChange={(e) => setSector(e.target.value as Sector)}
             style={{ width: "100%" }}
-          />
+          >
+            {SECTORS.map((s) => (
+              <option key={s.value} value={s.value}>
+                {s.label}
+              </option>
+            ))}
+          </select>
         </div>
 
+        <div ref={wrapperRef} style={{ position: "relative", marginTop: 10 }}>
+          <label htmlFor="location">Location</label>
+          <input
+            id="location"
+            value={location}
+            onChange={(e) => {
+              setLocation(e.target.value);
+              setShowDropdown(true);
+            }}
+            onFocus={() => setShowDropdown(true)}
+            onKeyDown={onKeyDown}
+            placeholder="e.g. Paros, Greece · Santorini · Mykonos town"
+            style={{
+              width: "100%",
+              borderColor: locationCheck.ok ? undefined : "var(--danger)",
+            }}
+            autoComplete="off"
+            spellCheck={false}
+          />
+          {showDropdown && suggestions.length > 0 && (
+            <ul
+              style={{
+                position: "absolute",
+                top: "100%",
+                left: 0,
+                right: 0,
+                marginTop: 4,
+                listStyle: "none",
+                padding: 4,
+                background: "var(--bg-elev, #1a1a1a)",
+                border: "1px solid var(--border, #333)",
+                borderRadius: 6,
+                maxHeight: 280,
+                overflowY: "auto",
+                zIndex: 20,
+                boxShadow: "0 8px 24px rgba(0,0,0,0.3)",
+              }}
+            >
+              {suggestions.map((s, idx) => (
+                <li
+                  key={s.placeId}
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                    pickSuggestion(s);
+                  }}
+                  onMouseEnter={() => setActiveIndex(idx)}
+                  style={{
+                    padding: "8px 10px",
+                    cursor: "pointer",
+                    borderRadius: 4,
+                    background: idx === activeIndex ? "var(--bg-hover, #2a2a2a)" : "transparent",
+                  }}
+                >
+                  <div style={{ fontSize: 14 }}>{s.mainText}</div>
+                  {s.secondaryText && (
+                    <div style={{ fontSize: 11, color: "var(--text-muted)" }}>
+                      {s.secondaryText}
+                    </div>
+                  )}
+                </li>
+              ))}
+            </ul>
+          )}
+          {!locationCheck.ok && (
+            <div style={{ color: "var(--danger)", fontSize: 11, marginTop: 4 }}>
+              {locationCheck.hint}
+            </div>
+          )}
+          {locationCheck.ok && demoMode && (
+            <div style={{ color: "var(--warn)", fontSize: 11, marginTop: 4 }}>
+              ⚠︎ Demo mode: location is not actually searched. Add{" "}
+              <code>GOOGLE_MAPS_API_KEY</code> to <code>.env</code> for real results.
+            </div>
+          )}
+          {locationCheck.ok && !demoMode && (
+            <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 4 }}>
+              Google Places will be queried with “{location.trim()}”.
+            </div>
+          )}
+        </div>
+
+        <div style={{ marginTop: 14 }}>
+          <label className="checkbox-row">
+            <input
+              type="checkbox"
+              checked={noWebsiteOnly}
+              onChange={(e) => setNoWebsiteOnly(e.target.checked)}
+            />
+            Only businesses without a website
+          </label>
+
+          <div className="form-row" style={{ marginTop: 10 }}>
+            <div>
+              <label htmlFor="minRating">Min rating</label>
+              <input
+                id="minRating"
+                type="number"
+                step={0.1}
+                min={0}
+                max={5}
+                value={minRating}
+                onChange={(e) => setMinRating(Number(e.target.value))}
+                style={{ width: "100%" }}
+              />
+            </div>
+            <div>
+              <label htmlFor="minReviews">Min reviews</label>
+              <input
+                id="minReviews"
+                type="number"
+                min={0}
+                value={minReviews}
+                onChange={(e) => setMinReviews(Number(e.target.value))}
+                style={{ width: "100%" }}
+              />
+            </div>
+          </div>
+
+          <div style={{ marginTop: 10 }}>
+            <label htmlFor="maxResults">Max results</label>
+            <input
+              id="maxResults"
+              type="number"
+              min={1}
+              max={200}
+              value={maxResults}
+              onChange={(e) => setMaxResults(Number(e.target.value))}
+              style={{ width: "100%" }}
+            />
+          </div>
+        </div>
+
+        <button
+          type="submit"
+          className="btn"
+          disabled={loading || !locationCheck.ok}
+          style={{ width: "100%", marginTop: 14 }}
+        >
+          {loading ? (
+            <>
+              <span className="spinner" /> Searching…
+            </>
+          ) : (
+            "Search businesses"
+          )}
+        </button>
       </div>
 
-      <div>
+      {/* ── 2. Research ──────────────────────────────────────────────── */}
+      <div className="filter-card">
+        <h3>2 · Research (per row)</h3>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -4, marginBottom: 12 }}>
+          AI call → produces a small JSON dossier (sources, vibe, signature features).
+          Click <strong>Research</strong> on a row in the results.
+        </div>
+
         <label htmlFor="researchModel">Research model (web-grounded dossier)</label>
         <select
           id="researchModel"
@@ -314,7 +341,14 @@ export function SearchForm({
         )}
       </div>
 
-      <div>
+      {/* ── 3. Site Generation ───────────────────────────────────────── */}
+      <div className="filter-card">
+        <h3>3 · Site generation (per row)</h3>
+        <div style={{ fontSize: 11, color: "var(--text-muted)", marginTop: -4, marginBottom: 12 }}>
+          AI call → uses the dossier to produce the full HTML site.
+          Click <strong>Generate site</strong> on a row that has been researched first.
+        </div>
+
         <label htmlFor="designModel">Design model (for site generation)</label>
         <select
           id="designModel"
@@ -338,16 +372,6 @@ export function SearchForm({
           </div>
         )}
       </div>
-
-      <button type="submit" className="btn" disabled={loading || !locationCheck.ok}>
-        {loading ? (
-          <>
-            <span className="spinner" /> Searching…
-          </>
-        ) : (
-          "Search businesses"
-        )}
-      </button>
     </form>
   );
 }

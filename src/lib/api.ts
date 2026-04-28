@@ -235,15 +235,21 @@ export interface StartGenerateResponse {
   jobId: string;
   status: "pending";
   modelId: DesignModelId;
-  researchModelId: DesignModelId;
+  researchModelId?: DesignModelId;
 }
 
 export function startGenerate(
   business: BusinessDetails,
   modelId: DesignModelId,
-  researchModelId: DesignModelId,
+  researchModelId: DesignModelId | undefined,
+  dossier?: unknown,
 ): Promise<StartGenerateResponse> {
-  return post<StartGenerateResponse>("generate-site", { business, modelId, researchModelId });
+  return post<StartGenerateResponse>("generate-site", {
+    business,
+    modelId,
+    researchModelId,
+    dossier,
+  });
 }
 
 export async function getJobStatus(jobId: string): Promise<JobRecord> {
@@ -257,16 +263,19 @@ export async function getJobStatus(jobId: string): Promise<JobRecord> {
 
 // Start generation and poll until done (or error / timeout).
 // onTick is called on every poll with the current record.
+// When `opts.dossier` is supplied, the backend skips the research call
+// and uses that dossier directly — the F12 log then prints [design] DONE
+// with only the design row (research row dropped).
 export async function generateSite(
   business: BusinessDetails,
   modelId: DesignModelId,
-  researchModelId: DesignModelId,
+  researchModelId: DesignModelId | undefined,
   onTick?: (rec: JobRecord) => void,
-  opts: { intervalMs?: number; timeoutMs?: number } = {},
+  opts: { intervalMs?: number; timeoutMs?: number; dossier?: unknown } = {},
 ): Promise<{ jobId: string; record: JobRecord }> {
   const interval = opts.intervalMs ?? 2000;
   const timeout = opts.timeoutMs ?? 5 * 60 * 1000; // 5 min
-  const { jobId } = await startGenerate(business, modelId, researchModelId);
+  const { jobId } = await startGenerate(business, modelId, researchModelId, opts.dossier);
   const deadline = Date.now() + timeout;
 
   while (Date.now() < deadline) {
@@ -275,45 +284,56 @@ export async function generateSite(
     onTick?.(record);
     if (record.status === "done" || record.status === "error") {
       if (record.status === "done") {
+        const researchSkipped = Boolean(opts.dossier);
         const r = record.usage?.research;
         const d = record.usage?.design;
-        const researchCost = phaseCostUSD(record.researchModelId, r?.input_tokens, r?.output_tokens, true);
+        const researchCost = researchSkipped
+          ? 0
+          : phaseCostUSD(record.researchModelId, r?.input_tokens, r?.output_tokens, true);
         const designCost = phaseCostUSD(record.modelId, d?.input_tokens, d?.output_tokens, false);
         const totalCost = researchCost + designCost;
         const totalTokens =
           (r?.input_tokens ?? 0) + (r?.output_tokens ?? 0) +
           (d?.input_tokens ?? 0) + (d?.output_tokens ?? 0);
 
-        console.groupCollapsed(
-          `%c[generate] DONE — ${record.businessName} — ${fmtUSD(totalCost)} total — ${Math.round((record.elapsedMs?.total ?? 0) / 1000)}s`,
-          "color: #5fa; font-weight: bold;",
-        );
-        console.table({
-          "Research model": {
+        const header = researchSkipped
+          ? `%c[design] DONE — ${record.businessName} — ${fmtUSD(designCost)} — ${Math.round((record.elapsedMs?.design ?? record.elapsedMs?.total ?? 0) / 1000)}s (research cached, skipped)`
+          : `%c[generate] DONE — ${record.businessName} — ${fmtUSD(totalCost)} total — ${Math.round((record.elapsedMs?.total ?? 0) / 1000)}s`;
+        console.groupCollapsed(header, "color: #5fa; font-weight: bold;");
+
+        const table: Record<string, Record<string, string>> = {};
+        if (!researchSkipped) {
+          table["Research model"] = {
             requested: record.researchModelId ?? "(none)",
             served_by_api: record.actualResearchModel ?? "(not reported)",
             in_tokens: fmtTokens(r?.input_tokens),
             out_tokens: fmtTokens(r?.output_tokens),
             cost_USD: fmtUSD(researchCost),
             elapsed_s: ((record.elapsedMs?.research ?? 0) / 1000).toFixed(1),
-          },
-          "Design model": {
-            requested: record.modelId ?? "(none)",
-            served_by_api: record.actualDesignModel ?? "(not reported)",
-            in_tokens: fmtTokens(d?.input_tokens),
-            out_tokens: fmtTokens(d?.output_tokens),
-            cost_USD: fmtUSD(designCost),
-            elapsed_s: ((record.elapsedMs?.design ?? 0) / 1000).toFixed(1),
-          },
-          TOTAL: {
+          };
+        }
+        table["Design model"] = {
+          requested: record.modelId ?? "(none)",
+          served_by_api: record.actualDesignModel ?? "(not reported)",
+          in_tokens: fmtTokens(d?.input_tokens),
+          out_tokens: fmtTokens(d?.output_tokens),
+          cost_USD: fmtUSD(designCost),
+          elapsed_s: ((record.elapsedMs?.design ?? 0) / 1000).toFixed(1),
+        };
+        if (!researchSkipped) {
+          table["TOTAL"] = {
             requested: "—",
             served_by_api: "—",
             in_tokens: "—",
             out_tokens: "—",
             cost_USD: fmtUSD(totalCost),
             elapsed_s: ((record.elapsedMs?.total ?? 0) / 1000).toFixed(1),
-          },
-        });
+          };
+        }
+        console.table(table);
+        if (researchSkipped) {
+          console.log("Research: cached from prior [research] click — no API call.");
+        }
         console.log("Total tokens (in+out):", totalTokens.toLocaleString("en-US"));
         console.log("Raw record:", record);
         console.groupEnd();
