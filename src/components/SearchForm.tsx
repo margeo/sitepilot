@@ -3,7 +3,6 @@ import {
   DESIGN_MODELS,
   SECTORS,
   type DesignModelId,
-  type SearchDepth,
   type SearchFilters,
   type Sector,
 } from "../types";
@@ -47,7 +46,6 @@ export function SearchForm({
   const [minRating, setMinRating] = useState(4.0);
   const [minReviews, setMinReviews] = useState(10);
   const [maxResults, setMaxResults] = useState(20);
-  const [searchDepth, setSearchDepth] = useState<SearchDepth>("quick");
 
   const [suggestions, setSuggestions] = useState<LocationSuggestion[]>([]);
   const [showDropdown, setShowDropdown] = useState(false);
@@ -132,7 +130,6 @@ export function SearchForm({
       minRating,
       minReviews,
       maxResults,
-      searchDepth,
     });
   }
 
@@ -287,24 +284,6 @@ export function SearchForm({
           />
         </div>
 
-        <div style={{ marginTop: 10 }}>
-          <label htmlFor="searchDepth">Search depth</label>
-          <select
-            id="searchDepth"
-            value={searchDepth}
-            onChange={(e) => setSearchDepth(e.target.value as SearchDepth)}
-            style={{ width: "100%" }}
-          >
-            <option value="quick">Quick — 1 query, ~2s, ~10–20 results</option>
-            <option value="deep">Deep — 5–9 queries paginated, ~15–25s, ~60–200 results</option>
-          </select>
-          {searchDepth === "deep" && (
-            <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 4 }}>
-              Broader phrasings, no primary-type filter — catches villas listed as
-              <code> lodging</code>, tavernas listed as <code>restaurant</code>, etc.
-            </div>
-          )}
-        </div>
       </div>
 
       <div>

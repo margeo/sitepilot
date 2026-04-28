@@ -26,8 +26,6 @@ export const SECTORS: SectorOption[] = [
   { value: "local_services", label: "Local services", googleType: "point_of_interest", keyword: "local service" },
 ];
 
-export type SearchDepth = "quick" | "deep";
-
 export interface SearchFilters {
   sector: Sector;
   location: string;
@@ -35,7 +33,6 @@ export interface SearchFilters {
   minRating: number;
   minReviews: number;
   maxResults: number;
-  searchDepth: SearchDepth;
 }
 
 export interface BusinessBasic {

@@ -9,7 +9,6 @@ interface Body {
   minRating?: number;
   minReviews?: number;
   maxResults?: number;
-  searchDepth?: "quick" | "deep";
 }
 
 interface Basic {
@@ -25,18 +24,16 @@ interface Basic {
 }
 
 interface SectorConfig {
-  quickQueries: string[]; // 1 phrase — used with per-type strict filtering for fast scan
-  deepQueries: string[]; // many phrasings — used without type filter for broad discovery
-  includedTypes: string[]; // primary Google place types for quick mode
+  queries: string[]; // many phrasings — paginated 3 pages each, no per-call type filter
+  includedTypes: string[]; // post-filter type whitelist (any-of)
 }
 
-// Quick mode: one focused query, strict per-type filtering — returns ~10–20 results fast.
-// Deep mode: multiple phrasings, NO includedType filter, paginated to 3 pages each — returns
-// 60–200 results in 10–25s. Deep mode is noticeably more expensive (6× more API calls).
+// One unified search mode: multiple phrasings, paginated to 3 pages each (60
+// raw per phrasing), then post-filtered by type whitelist + location tokens.
+// Replaces the old quick/deep split.
 const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
   restaurants_tavernas: {
-    quickQueries: ["restaurants and tavernas"],
-    deepQueries: [
+    queries: [
       "restaurants",
       "tavernas",
       "Greek tavernas",
@@ -67,8 +64,7 @@ const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
     ],
   },
   cafes_bars_pubs: {
-    quickQueries: ["cafes bars and pubs"],
-    deepQueries: [
+    queries: [
       "cafes",
       "coffee shops",
       "espresso bars",
@@ -85,36 +81,36 @@ const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
     ],
     includedTypes: ["cafe", "coffee_shop", "bar", "pub", "wine_bar"],
   },
+  // 20-query structure validated empirically across Symi / Athens / Paros /
+  // Mykonos. Drops queries that proved globally dead at Google's searchText
+  // endpoint (vacation rentals, holiday rentals, holiday homes, villas) and
+  // queries that proved noisy or near-zero-value (resorts, traditional stone
+  // houses). Adds `lodging` as the broadest umbrella term — strong recall
+  // anchor that complements `hotels`.
   accommodations: {
-    quickQueries: ["hotels villas apartments and vacation rentals"],
-    deepQueries: [
-      // Traditional hotel side
+    queries: [
+      // Tier A — umbrella
+      "lodging",
       "hotels",
+      // Tier B — hotel-tier
       "boutique hotels",
-      "resorts",
       "motels",
       "inns",
       "hostels",
       "extended stay hotels",
       "aparthotels",
-      // Vacation rental umbrella (Google/Airbnb "private" label — maps to lodging/guest_house types)
-      "villas",
-      "vacation rentals",
-      "holiday rentals",
-      "holiday homes",
+      // Tier C — rentals + apartments
       "apartments for rent",
       "condos",
       "studios",
       "serviced apartments",
-      "traditional stone houses",
       "seaside apartments",
-      // B&B / guesthouse side
       "bed and breakfasts",
       "guesthouses",
+      // Tier D — specialty
       "farmstays",
-      // Specialty / glamping
-      "cabins",
       "cottages",
+      "cabins",
       "bungalows",
       "houseboats",
     ],
@@ -134,8 +130,7 @@ const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
     ],
   },
   boutique: {
-    quickQueries: ["boutiques"],
-    deepQueries: [
+    queries: [
       "boutiques",
       "fashion stores",
       "clothing stores",
@@ -146,19 +141,11 @@ const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
     includedTypes: ["clothing_store"],
   },
   car_rental: {
-    quickQueries: ["car rentals"],
-    deepQueries: [
-      "car rentals",
-      "car hire",
-      "rent a car",
-      "scooter rentals",
-      "vehicle rentals",
-    ],
+    queries: ["car rentals", "car hire", "rent a car", "scooter rentals", "vehicle rentals"],
     includedTypes: ["car_rental"],
   },
   boat_rental: {
-    quickQueries: ["boat tours and rentals"],
-    deepQueries: [
+    queries: [
       "boat rentals",
       "boat tours",
       "yacht charters",
@@ -170,8 +157,7 @@ const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
     includedTypes: ["tour_agency"],
   },
   beauty_wellness: {
-    quickQueries: ["beauty salons and spas"],
-    deepQueries: [
+    queries: [
       "beauty salons",
       "spas",
       "hair salons",
@@ -183,15 +169,7 @@ const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
     includedTypes: ["beauty_salon", "spa", "hair_salon", "nail_salon"],
   },
   local_services: {
-    quickQueries: ["local services"],
-    deepQueries: [
-      "local services",
-      "workshops",
-      "repair shops",
-      "small shops",
-      "artisans",
-      "pottery",
-    ],
+    queries: ["local services", "workshops", "repair shops", "small shops", "artisans", "pottery"],
     includedTypes: ["store"],
   },
 };
@@ -214,30 +192,20 @@ interface PlacesError {
 }
 
 // Single call (or paginated chain) to Places Text Search.
-// If `includedType` is undefined, we search broadly (no type filter, no strict).
 // maxPages caps the pagination; Google requires a short wait between page fetches
-// for the nextPageToken to become valid.
+// for the nextPageToken to become valid, and stops issuing tokens after page 3.
 async function placesTextSearch(args: {
   apiKey: string;
   textQuery: string;
-  includedType?: string;
-  strictTypeFiltering?: boolean;
   maxPages?: number;
   errors?: PlacesError[];
 }): Promise<Basic[]> {
-  const { apiKey, textQuery, includedType, strictTypeFiltering = false, maxPages = 1, errors } = args;
+  const { apiKey, textQuery, maxPages = 3, errors } = args;
   const all: Basic[] = [];
   let pageToken: string | undefined;
 
   for (let page = 0; page < maxPages; page++) {
-    const reqBody: Record<string, unknown> = {
-      textQuery,
-      pageSize: 20,
-    };
-    if (includedType) {
-      reqBody.includedType = includedType;
-      reqBody.strictTypeFiltering = strictTypeFiltering;
-    }
+    const reqBody: Record<string, unknown> = { textQuery, pageSize: 20 };
     if (pageToken) reqBody.pageToken = pageToken;
 
     const res = await fetch(PLACES_URL, {
@@ -251,7 +219,6 @@ async function placesTextSearch(args: {
       body: JSON.stringify(reqBody),
     });
     if (!res.ok) {
-      // Don't fail the whole search if one query errors — just skip this query.
       const body = await res.text().catch(() => "");
       const message = body.slice(0, 300) || res.statusText;
       console.warn(`[places] ${res.status} on "${textQuery}" page ${page + 1}: ${message}`);
@@ -309,7 +276,6 @@ export const handler: Handler = async (event) => {
     minRating = 0,
     minReviews = 0,
     maxResults = 20,
-    searchDepth = "quick",
   } = body;
   if (!sector || !location) {
     return jsonRes(400, { error: "sector and location are required" });
@@ -329,94 +295,63 @@ export const handler: Handler = async (event) => {
         has_website: d.has_website,
       })),
       demo: true,
-      searchDepth,
       note: "No GOOGLE_MAPS_API_KEY set — showing demo data. Add the env var in Netlify to search real businesses.",
     });
   }
 
   try {
     const cfg = SECTOR_CONFIG[sector];
-    let raw: Basic[];
-    const debug: Record<string, unknown> = { mode: searchDepth };
-
+    const debug: Record<string, unknown> = {};
     const errors: PlacesError[] = [];
-    if (searchDepth === "deep") {
-      // Deep: multiple phrasings, no type filter, paginate up to 3 pages each. Broad discovery.
-      const queries = cfg.deepQueries.map((q) => `${q} in ${location}`);
-      const batches = await Promise.all(
-        queries.map((q) => placesTextSearch({ apiKey, textQuery: q, maxPages: 3, errors })),
-      );
-      const byId = new Map<string, Basic>();
-      for (const list of batches) for (const b of list) byId.set(b.place_id, b);
-      raw = Array.from(byId.values());
-      // Walk batches in array order, crediting each query with the place_ids
-      // it sees first. Earlier queries absorb the bulk; later/niche queries'
-      // uniqueAdded count reveals whether they're earning their keep.
-      const seen = new Set<string>();
-      debug.perQuery = queries.map((q, i) => {
-        const batch = batches[i];
-        const newOnes = batch.filter((b) => !seen.has(b.place_id));
-        for (const b of newOnes) seen.add(b.place_id);
-        return {
-          query: q,
-          returned: batch.length,
-          uniqueAdded: newOnes.length,
-          newNames: newOnes.map((b) => b.name),
-        };
+
+    // Fire all phrasings in parallel, paginated to 3 pages each (max 60 per phrasing).
+    const queries = cfg.queries.map((q) => `${q} in ${location}`);
+    const batches = await Promise.all(
+      queries.map((q) => placesTextSearch({ apiKey, textQuery: q, maxPages: 3, errors })),
+    );
+
+    // Dedupe by place_id, keep first occurrence (= earliest query gets credit).
+    const byId = new Map<string, Basic>();
+    for (const list of batches) for (const b of list) if (!byId.has(b.place_id)) byId.set(b.place_id, b);
+    let raw = Array.from(byId.values());
+
+    // Per-query "uniqueAdded" trace for F12 debug.
+    const seen = new Set<string>();
+    debug.perQuery = queries.map((q, i) => {
+      const batch = batches[i];
+      const newOnes = batch.filter((b) => !seen.has(b.place_id));
+      for (const b of newOnes) seen.add(b.place_id);
+      return {
+        query: q,
+        returned: batch.length,
+        uniqueAdded: newOnes.length,
+        newNames: newOnes.map((b) => b.name),
+      };
+    });
+    debug.totalRaw = raw.length;
+
+    // Post-filter 1: type whitelist (any-of). Drops "Hotel X" restaurant
+    // and similar miscategorized results that text-match but aren't lodging.
+    const whitelist = new Set(cfg.includedTypes);
+    raw = raw.filter((r) => (r.types ?? []).some((t) => whitelist.has(t)));
+    debug.afterTypeWhitelist = raw.length;
+
+    // Post-filter 2: location tokens. Drops places matched by the country
+    // word only (e.g. "Symi" hotel-search returns Limnos result whose only
+    // shared token is "Greece"). Loose enough to keep neighborhood-named
+    // addresses ("Ornos 846 00, Greece" passes via "greece").
+    const locTokens = location
+      .toLowerCase()
+      .split(/[,/]/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 2);
+    if (locTokens.length > 0) {
+      raw = raw.filter((r) => {
+        const addr = (r.address || "").toLowerCase();
+        return locTokens.some((t) => addr.includes(t));
       });
-      debug.totalRaw = raw.length;
-      // Post-filter 1: sector's primary-type whitelist so broad text queries
-      // ("hotels in Symi") don't bleed other categories in (a restaurant
-      // named "Hotel X", a shop named "Villa Y", etc.).
-      const whitelist = new Set(cfg.includedTypes);
-      raw = raw.filter((r) => (r.types ?? []).some((t) => whitelist.has(t)));
-      debug.afterTypeWhitelist = raw.length;
-      // Post-filter 2: geographic — Google's text search is not location-
-      // strict and will happily return matching businesses from other
-      // countries ("Symi" in Greece can yield results in Mèze, France).
-      // Drop any result whose formatted_address doesn't contain at least
-      // one meaningful token from the location string.
-      const locTokens = location
-        .toLowerCase()
-        .split(/[,/]/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 2);
-      if (locTokens.length > 0) {
-        raw = raw.filter((r) => {
-          const addr = (r.address || "").toLowerCase();
-          return locTokens.some((t) => addr.includes(t));
-        });
-      }
-      debug.afterLocationFilter = raw.length;
-    } else {
-      // Quick: single broad phrase, NO type filter, 2 pages (max 40), then
-      // post-filter by type whitelist (any-of) + location tokens. Same
-      // post-filter logic as deep — just one query instead of 23.
-      const quickQuery = `${cfg.quickQueries[0]} in ${location}`;
-      raw = await placesTextSearch({ apiKey, textQuery: quickQuery, maxPages: 2, errors });
-      debug.perQuery = [{
-        query: quickQuery,
-        returned: raw.length,
-        uniqueAdded: raw.length,
-        newNames: raw.map((b) => b.name),
-      }];
-      debug.totalRaw = raw.length;
-      const whitelist = new Set(cfg.includedTypes);
-      raw = raw.filter((r) => (r.types ?? []).some((t) => whitelist.has(t)));
-      debug.afterTypeWhitelist = raw.length;
-      const locTokens = location
-        .toLowerCase()
-        .split(/[,/]/)
-        .map((s) => s.trim())
-        .filter((s) => s.length > 2);
-      if (locTokens.length > 0) {
-        raw = raw.filter((r) => {
-          const addr = (r.address || "").toLowerCase();
-          return locTokens.some((t) => addr.includes(t));
-        });
-      }
-      debug.afterLocationFilter = raw.length;
     }
+    debug.afterLocationFilter = raw.length;
 
     const totalFound = raw.length;
     let results = raw;
@@ -430,7 +365,7 @@ export const handler: Handler = async (event) => {
     debug.errorCount = errors.length;
     debug.errors = errors;
 
-    return jsonRes(200, { businesses: results, demo: false, totalFound, searchDepth, _debug: debug });
+    return jsonRes(200, { businesses: results, demo: false, totalFound, _debug: debug });
   } catch (err) {
     return jsonRes(500, {
       error: err instanceof Error ? err.message : String(err),
