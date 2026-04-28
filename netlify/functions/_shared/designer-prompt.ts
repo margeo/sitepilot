@@ -1,12 +1,25 @@
-// System prompt for the free-form site designer. Combines Anthropic's public
-// `frontend-design` skill with SitePilot-specific rules (phones, CTAs, bilingual,
-// image handling, owner-edit markers).
+// System prompt for the free-form site designer.
+//
+// As of 2026-04-28 the active prompt is the LEAN version below — replaces
+// the verbose ~7,800-char system prompt with a ~2,400-char one (-69%).
+// Removed the inline frontend-design skill text in favor of a one-line
+// reference (Claude.ai loads the live skill itself; ChatGPT/Gemini get a
+// 5-step checklist that mirrors how Claude actually thinks anyway).
+//
+// REVERT: change the two lines at the bottom that read
+//   export const DESIGNER_SYSTEM_FULL = SITEPILOT_PROMPT_LEAN
+// to point to DESIGNER_SYSTEM_FULL_LEGACY instead. The legacy constants
+// are kept intact for that purpose.
 
 import type { Dossier } from "./dossier";
 
+// =====================================================================
+// LEGACY (verbose) — kept for one-line revert. NOT exported by default.
+// =====================================================================
+
 // Verbatim from github.com/anthropics/skills/tree/main/skills/frontend-design
-// Last synced: 2026-04-28 (commit on main as of fetch).
-const FRONTEND_DESIGN_SKILL = `This skill guides creation of distinctive, production-grade frontend interfaces that avoid generic "AI slop" aesthetics. Implement real working code with exceptional attention to aesthetic details and creative choices.
+// Last synced: 2026-04-28.
+const FRONTEND_DESIGN_SKILL_LEGACY = `This skill guides creation of distinctive, production-grade frontend interfaces that avoid generic "AI slop" aesthetics. Implement real working code with exceptional attention to aesthetic details and creative choices.
 
 The user provides frontend requirements: a component, page, application, or interface to build. They may include context about the purpose, audience, or technical constraints.
 
@@ -43,7 +56,7 @@ Interpret creatively and make unexpected choices that feel genuinely designed fo
 
 Remember: Claude is capable of extraordinary creative work. Don't hold back, show what can truly be created when thinking outside the box and committing fully to a distinctive vision.`;
 
-const SITEPILOT_RULES = `# SitePilot production rules — STRICT
+const SITEPILOT_RULES_LEGACY = `# SitePilot production rules — STRICT
 
 You are generating a bilingual single-file website for a small Greek business (tourism, hospitality, or local services). Apply the aesthetic guidance above, then follow THESE hard rules exactly.
 
@@ -118,14 +131,84 @@ Small discreet footer: brand italic serif, nav links, "© <current year> <brand>
 
 Produce the complete bilingual HTML now. No commentary before or after it.`;
 
-// Full system prompt: used for paths that can NOT load the skill natively
-// (OpenRouter for every model, Gemini direct). The skill text is pasted inline.
-export const DESIGNER_SYSTEM_FULL = `${FRONTEND_DESIGN_SKILL}\n\n${SITEPILOT_RULES}`;
+export const DESIGNER_SYSTEM_FULL_LEGACY =
+  `${FRONTEND_DESIGN_SKILL_LEGACY}\n\n${SITEPILOT_RULES_LEGACY}`;
+export const DESIGNER_SYSTEM_RULES_ONLY_LEGACY = SITEPILOT_RULES_LEGACY;
 
-// Rules-only system prompt: used for Anthropic-direct paths that load the
-// frontend-design skill natively via container.skills. Claude gets the skill
-// at inference time; we only need to tell it the SitePilot-specific rules.
-export const DESIGNER_SYSTEM_RULES_ONLY = SITEPILOT_RULES;
+// =====================================================================
+// LEAN (active) — references the frontend-design skill instead of
+// pasting it inline. ~2,400 chars total. Mirrors the 5-step checklist
+// Claude follows internally regardless of how verbose the prompt is.
+// =====================================================================
+
+const SITEPILOT_PROMPT_LEAN = `Build a complete production-grade single-file HTML website for a small Greek tourism business.
+
+Apply your frontend-design skill if you have it loaded
+(github.com/anthropics/skills/tree/main/skills/frontend-design).
+
+Before coding, commit to:
+1. Aesthetic direction (one phrase: editorial Mediterranean / brutalist-elegant / Japanese minimal / art-deco geometric / playful-folk / etc.). Vary across runs.
+2. Type pair: distinctive display + clean body. Never Inter, Arial, Roboto, Space Grotesk.
+3. Palette: dominant + sharp accent. Never purple-on-white.
+4. Section flow: hero → 3-5 brand sections → visit/contact.
+5. Pull verbatim review quotes for testimonials.
+
+## OUTPUT
+- One HTML doc starting with \`<!doctype html>\`. No commentary, no fences.
+- All CSS in a single \`<style>\`. All JS inline at end of body.
+- External: Google Fonts only.
+
+## BILINGUAL EN/EL
+- Every visible string in \`<span class="lang-en">…</span><span class="lang-el">…</span>\`.
+- Top-right pill toggle EN | EL. Default EN. Persist via localStorage.
+- \`body[data-lang="en"] .lang-el {display:none}\` and vice versa.
+- Greek must be natural, idiomatic. Use «» punctuation.
+
+## SECTIONS
+- Hero first. Visit/Contact last. 4-6 total.
+- Invent section names from the dossier — never "About", "Menu", "Gallery", "Rooms".
+- Each main section: 2-3 paragraphs + 1 verbatim review pull quote (attributed by first name).
+
+## COPY
+- Ground every claim in the dossier. Never invent prices, dishes, founders, awards.
+- Forbidden: "nestled", "discover", "come experience", "welcome to", "authentic flavours", "warm hospitality", "embark on", "step into", "oasis of", "hidden gem", "perfect blend", "unforgettable experience".
+- Prefer concrete specifics ("30 steps to the water") over generalities.
+
+## PHONES & CTAS
+- Mobile → wrap in BOTH \`tel:+<number>\` AND \`wa.me/<number>?text=<url-encoded greeting>\`.
+- Landline → only if present.
+- Directions URL: \`https://www.google.com/maps/search/?api=1&query=<urlencoded name>&query_place_id=<place_id>\`. Fall back to name+address if no place_id.
+- Floating WhatsApp button: bottom-right, 60px green (#25D366), tooltip "Chat with <host>". <520px viewport: 54px, no tooltip.
+
+## IMAGES
+- Use provided photo_urls with \`loading="lazy"\` and \`object-fit:cover\`.
+- Never hotlink airbnb.com / booking.com / tripadvisor.com (403s).
+- No photo_urls? Inline SVG placeholders with palette-matched gradients and "REPLACE · LABEL" text.
+
+## PRICES
+- Omit. Pricing happens via WhatsApp / phone / OTA listings.
+
+## OWNER EDIT
+- After \`<meta theme-color>\` insert:
+  \`<!-- OWNER EDIT NOTES — Bilingual site. Every visible string appears twice in lang-en/lang-el spans. Edit BOTH. Look for EDIT: markers. Prices omitted — pricing via WhatsApp / phone / OTA. -->\`
+- Add inline \`<!-- EDIT: LABEL -->\` markers above editable images, phone, WhatsApp button, first paragraph of each section. Never nest comments.
+
+## META & FOOTER
+- \`<title>\`: "<Brand> · <Location>" specific.
+- \`<meta description>\`: under 160 chars, specific. No clichés.
+- \`<meta theme-color>\`: dominant palette color.
+- Footer: brand italic serif, nav links, "© <year> <brand> · <location>", "Photos © the owners".
+
+Produce the complete bilingual HTML now.`;
+
+// =====================================================================
+// Active exports.
+// To revert to the legacy verbose prompt, swap these two assignments
+// to use the *_LEGACY constants above.
+// =====================================================================
+
+export const DESIGNER_SYSTEM_FULL = SITEPILOT_PROMPT_LEAN;
+export const DESIGNER_SYSTEM_RULES_ONLY = SITEPILOT_PROMPT_LEAN;
 
 // Back-compat alias for any callsite that used the old constant name.
 export const DESIGNER_SYSTEM = DESIGNER_SYSTEM_FULL;
