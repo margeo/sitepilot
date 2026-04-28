@@ -305,7 +305,7 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
                     className={`btn btn-sm ${active ? "" : "btn-secondary"}`}
                     onClick={() => copyAndOpen(p)}
                     disabled={!prompt}
-                    title={`Copy prompt and open ${cfg.label} (~$${cfg.inPer1M}/M in, $${cfg.outPer1M}/M out via API)`}
+                    title={`Copy prompt and open ${cfg.label}`}
                   >
                     {active ? `→ ${cfg.label}` : `Open ${cfg.label}`}
                   </button>
