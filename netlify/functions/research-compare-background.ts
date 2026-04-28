@@ -13,17 +13,37 @@ interface JobInput {
   business: ResearchBusiness;
 }
 
-const MODEL_IDS: Array<{ id: string | undefined; label: string }> = [
-  { id: undefined, label: "Gemini 2.5 Flash · default (Gemini direct + google_search)" },
-  { id: "openrouter:google/gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite · OpenRouter :online" },
-  { id: "openrouter:google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro · OpenRouter :online" },
-  { id: "openrouter:anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5 · OpenRouter :online" },
-  { id: "openrouter:anthropic/claude-sonnet-4.6", label: "Claude Sonnet 4.6 · OpenRouter :online" },
-  { id: "openrouter:anthropic/claude-opus-4.7", label: "Claude Opus 4.7 · OpenRouter :online" },
-  { id: "anthropic:claude-haiku-4-5", label: "Claude Haiku 4.5 · Anthropic direct + web_search" },
-  { id: "anthropic:claude-sonnet-4-6", label: "Claude Sonnet 4.6 · Anthropic direct + web_search" },
-  { id: "anthropic:claude-opus-4-7", label: "Claude Opus 4.7 · Anthropic direct + web_search" },
+// Approximate USD pricing (per 1M tokens) + per-call surcharges. Sources:
+// OpenRouter / Anthropic / Google AI public pricing pages, late 2026.
+// inSearch = surcharge added once per call (Exa or web_search overhead).
+interface ModelEntry {
+  id: string | undefined;
+  label: string;
+  inPer1M: number;
+  outPer1M: number;
+  inSearch: number;
+}
+
+const MODEL_IDS: ModelEntry[] = [
+  // Gemini direct: gemini-2.5-flash
+  { id: undefined, label: "Gemini 2.5 Flash · default (Gemini direct + google_search)", inPer1M: 0.075, outPer1M: 0.30, inSearch: 0 },
+
+  // OpenRouter :online plugin = ~$0.005 per call for Exa search
+  { id: "openrouter:google/gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite · OpenRouter :online", inPer1M: 0.10, outPer1M: 0.40, inSearch: 0.005 },
+  { id: "openrouter:google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro · OpenRouter :online", inPer1M: 1.25, outPer1M: 5.00, inSearch: 0.005 },
+  { id: "openrouter:anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5 · OpenRouter :online", inPer1M: 1.00, outPer1M: 5.00, inSearch: 0.005 },
+  { id: "openrouter:anthropic/claude-sonnet-4.6", label: "Claude Sonnet 4.6 · OpenRouter :online", inPer1M: 3.00, outPer1M: 15.00, inSearch: 0.005 },
+  { id: "openrouter:anthropic/claude-opus-4.7", label: "Claude Opus 4.7 · OpenRouter :online", inPer1M: 15.00, outPer1M: 75.00, inSearch: 0.005 },
+
+  // Anthropic direct + web_search: $10 per 1000 searches; assume ~3 searches per call = $0.03
+  { id: "anthropic:claude-haiku-4-5", label: "Claude Haiku 4.5 · Anthropic direct + web_search", inPer1M: 1.00, outPer1M: 5.00, inSearch: 0.03 },
+  { id: "anthropic:claude-sonnet-4-6", label: "Claude Sonnet 4.6 · Anthropic direct + web_search", inPer1M: 3.00, outPer1M: 15.00, inSearch: 0.03 },
+  { id: "anthropic:claude-opus-4-7", label: "Claude Opus 4.7 · Anthropic direct + web_search", inPer1M: 15.00, outPer1M: 75.00, inSearch: 0.03 },
 ];
+
+function estimateCostUSD(entry: ModelEntry, inTok = 0, outTok = 0): number {
+  return (inTok * entry.inPer1M + outTok * entry.outPer1M) / 1_000_000 + entry.inSearch;
+}
 
 interface ResultRow {
   modelId: string | undefined;
@@ -32,6 +52,7 @@ interface ResultRow {
   model?: string;
   dossier?: unknown;
   usage?: { input_tokens?: number; output_tokens?: number };
+  costUSD?: number;
   elapsedMs: number;
   error?: string;
   sourcesCount?: number;
@@ -67,7 +88,8 @@ export default async (req: Request, _context: Context) => {
   });
 
   const settled = await Promise.allSettled(
-    MODEL_IDS.map(async ({ id, label }): Promise<ResultRow> => {
+    MODEL_IDS.map(async (entry): Promise<ResultRow> => {
+      const { id, label } = entry;
       const ts = Date.now();
       try {
         const { dossier, model, usage } = await researchBusiness(input.business, id);
@@ -84,6 +106,7 @@ export default async (req: Request, _context: Context) => {
           model,
           dossier,
           usage,
+          costUSD: estimateCostUSD(entry, usage?.input_tokens, usage?.output_tokens),
           elapsedMs: Date.now() - ts,
           sourcesCount: d.sources?.length ?? 0,
           signatureCount: d.signature_elements?.length ?? 0,
