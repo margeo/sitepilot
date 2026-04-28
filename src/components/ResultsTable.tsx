@@ -1,3 +1,4 @@
+import { useState } from "react";
 import type { BusinessBasic } from "../types";
 
 interface Props {
@@ -40,7 +41,13 @@ interface DossierShape {
   sources?: Array<{ title?: string | null; uri?: string | null }> | null;
 }
 
-function DossierPanel({ dossier }: { dossier: DossierShape }) {
+function DossierPanel({
+  dossier,
+  onClose,
+}: {
+  dossier: DossierShape;
+  onClose: () => void;
+}) {
   const bi = dossier.brand_identity ?? {};
   const sig = dossier.signature_elements ?? [];
   const reviews = dossier.review_highlights ?? [];
@@ -63,14 +70,50 @@ function DossierPanel({ dossier }: { dossier: DossierShape }) {
         fontSize: 12.5,
         lineHeight: 1.55,
         color: "var(--text)",
+        position: "relative",
       }}
     >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close dossier"
+        title="Close dossier"
+        style={{
+          position: "absolute",
+          top: 6,
+          right: 8,
+          width: 26,
+          height: 26,
+          padding: 0,
+          background: "transparent",
+          border: "1px solid var(--border)",
+          borderRadius: 6,
+          color: "var(--text-muted)",
+          cursor: "pointer",
+          fontSize: 14,
+          lineHeight: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+        onMouseEnter={(e) => {
+          e.currentTarget.style.background = "var(--bg-card)";
+          e.currentTarget.style.color = "var(--text)";
+        }}
+        onMouseLeave={(e) => {
+          e.currentTarget.style.background = "transparent";
+          e.currentTarget.style.color = "var(--text-muted)";
+        }}
+      >
+        ✕
+      </button>
       <div
         style={{
           display: "flex",
           alignItems: "center",
           gap: 10,
           marginBottom: 10,
+          paddingRight: 32,
           color: "var(--accent)",
           fontWeight: 700,
           fontSize: 11,
@@ -200,6 +243,32 @@ export function ResultsTable({
   researchingId,
   researchedIds,
 }: Props) {
+  // Place_ids whose dossier panel the user has manually closed. The dossier
+  // itself stays cached in researchedIds (so Generate site still works);
+  // only the panel UI is hidden.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
+
+  function closePanel(placeId: string) {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      next.add(placeId);
+      return next;
+    });
+  }
+
+  function handleResearchClick(b: BusinessBasic) {
+    // Re-clicking Research auto-reopens a previously closed panel — the
+    // user explicitly asked for fresh dossier output, so showing it makes
+    // sense.
+    setCollapsedIds((prev) => {
+      if (!prev.has(b.place_id)) return prev;
+      const next = new Set(prev);
+      next.delete(b.place_id);
+      return next;
+    });
+    onResearch(b);
+  }
+
   if (results.length === 0) return null;
 
   return (
@@ -217,6 +286,7 @@ export function ResultsTable({
         const isResearching = researchingId === b.place_id;
         const dossier = researchedIds?.get(b.place_id) as DossierShape | undefined;
         const isResearched = Boolean(dossier);
+        const isPanelOpen = isResearched && !collapsedIds.has(b.place_id);
         const anyBusy = isGenerating || isResearching;
         return (
           <div key={b.place_id}>
@@ -262,7 +332,7 @@ export function ResultsTable({
                 <button
                   className="btn btn-sm btn-secondary"
                   disabled={anyBusy}
-                  onClick={() => onResearch(b)}
+                  onClick={() => handleResearchClick(b)}
                 >
                   {isResearching ? (
                     <>
@@ -299,7 +369,9 @@ export function ResultsTable({
                 </button>
               </div>
             </div>
-            {isResearched && dossier && <DossierPanel dossier={dossier} />}
+            {isPanelOpen && dossier && (
+              <DossierPanel dossier={dossier} onClose={() => closePanel(b.place_id)} />
+            )}
           </div>
         );
       })}
