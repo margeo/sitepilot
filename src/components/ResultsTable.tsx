@@ -770,44 +770,32 @@ export function ResultsTable({
                     "Research"
                   )}
                 </button>
-                <button
-                  className="btn btn-sm"
-                  disabled={anyBusy}
-                  onClick={() => handleGenerateClick(b)}
-                  title={
-                    !isResearched
-                      ? "Click Research first — Generate site uses the cached dossier"
-                      : "Generate via API (paid, automated)"
-                  }
-                  style={!isResearched ? { opacity: 0.55 } : undefined}
-                >
-                  {isGenerating ? (
-                    <>
-                      <span className="spinner" />
-                      Building…
-                    </>
-                  ) : isSiteCached ? (
-                    "Re-generate"
-                  ) : (
-                    "Generate site"
-                  )}
-                </button>
                 {onManualSiteSave && (
                   <button
                     type="button"
-                    className="btn btn-sm btn-secondary"
+                    className="btn btn-sm"
                     disabled={!isResearched || anyBusy}
                     onClick={() => toggleManualPanel(b.place_id)}
                     title={
                       !isResearched
                         ? "Click Research first — manual generation uses the cached dossier"
-                        : "Generate via claude.ai web (free, copy-paste workflow)"
+                        : "Generate via Claude.ai / ChatGPT / Gemini web subscription (free, copy-paste workflow)"
                     }
                     style={!isResearched ? { opacity: 0.55 } : undefined}
                   >
-                    {manualOpenIds.has(b.place_id) ? "Manual ▴" : "Manual"}
+                    {manualOpenIds.has(b.place_id)
+                      ? "Manually generate site ▴"
+                      : "Manually generate site"}
                   </button>
                 )}
+                <button
+                  className="btn btn-sm btn-secondary"
+                  disabled
+                  title="API path is paused — use Manually generate site (free) instead. The API path would bill ~$0.06-1.00 per site depending on the design model."
+                  style={{ opacity: 0.45 }}
+                >
+                  {isSiteCached ? "Re-generate (API)" : "Generate site (API)"}
+                </button>
               </div>
             </div>
             {isPanelOpen && dossier && (
