@@ -395,3 +395,34 @@ export function resolveNames(
 ): Promise<ResolveNamesResponse> {
   return post<ResolveNamesResponse>("resolve-names", { names, locationHint });
 }
+
+export interface BuildDesignPromptResponse {
+  prompt: string;
+  chars: number;
+  estimatedTokens: number;
+}
+
+export function buildDesignPrompt(
+  business: BusinessDetails,
+  dossier: unknown,
+): Promise<BuildDesignPromptResponse> {
+  return post<BuildDesignPromptResponse>("build-design-prompt", {
+    business,
+    dossier,
+    origin: typeof window !== "undefined" ? window.location.origin : undefined,
+  });
+}
+
+// Strip preamble / trailing commentary / fenced code blocks from a Claude
+// chat response and return the bare HTML document. Mirrors the backend
+// extractHtml in free-form-designer.ts so manually-pasted output normalises
+// to the same shape the design API would have produced.
+export function extractHtmlFromPaste(text: string): string {
+  const fenced = text.match(/```(?:html)?\s*([\s\S]*?)\s*```/i);
+  if (fenced) return fenced[1].trim();
+  const docIdx = text.search(/<!doctype\s+html/i);
+  if (docIdx >= 0) return text.slice(docIdx).trim();
+  const htmlIdx = text.search(/<html[\s>]/i);
+  if (htmlIdx >= 0) return text.slice(htmlIdx).trim();
+  return text.trim();
+}

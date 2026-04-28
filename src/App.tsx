@@ -352,6 +352,18 @@ export default function App() {
     }
   }
 
+  // Persist a manually-generated site (pasted from claude.ai web) into the
+  // same per-row caches an API run would have populated. The site keeps a
+  // generated_by="manual" marker so SitePreview can label it accordingly.
+  function saveManualSite(placeId: string, site: GeneratedSite) {
+    setSiteByPlaceId((prev) => {
+      const next = new Map(prev);
+      next.set(placeId, site);
+      return next;
+    });
+    setSelectedId(placeId);
+  }
+
   // Shared by ScreenshotImport and ManualImport — merge a freshly resolved
   // batch into the visible results, dedupe by place_id, and seed lastFilters
   // so the main-pane header has something sensible to show.
@@ -609,6 +621,7 @@ export default function App() {
             researchedIds={dossierByPlaceId}
             siteByPlaceId={siteByPlaceId}
             businessByPlaceId={businessByPlaceId}
+            onManualSiteSave={saveManualSite}
           />
         </div>
       </main>

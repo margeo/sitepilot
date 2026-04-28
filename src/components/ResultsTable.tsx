@@ -1,6 +1,7 @@
 import { useState } from "react";
 import type { BusinessBasic, BusinessDetails, GeneratedSite } from "../types";
 import { SitePreview } from "./SitePreview";
+import { ManualGeneratePanel } from "./ManualGeneratePanel";
 
 interface Props {
   results: BusinessBasic[];
@@ -18,6 +19,8 @@ interface Props {
   // needs (business). Both are persisted to localStorage by App.tsx.
   siteByPlaceId?: ReadonlyMap<string, GeneratedSite>;
   businessByPlaceId?: ReadonlyMap<string, BusinessDetails>;
+  // Save handler for the manual (claude.ai web) generation path.
+  onManualSiteSave?: (placeId: string, site: GeneratedSite) => void;
 }
 
 // Loose shape of the dossier returned by /research-business. Mirrors the
@@ -250,6 +253,7 @@ export function ResultsTable({
   researchedIds,
   siteByPlaceId,
   businessByPlaceId,
+  onManualSiteSave,
 }: Props) {
   // Place_ids whose dossier panel the user has manually closed. The dossier
   // itself stays cached in researchedIds (so Generate site still works);
@@ -257,6 +261,18 @@ export function ResultsTable({
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   // Same pattern for the per-row generated-site preview panel.
   const [collapsedSiteIds, setCollapsedSiteIds] = useState<Set<string>>(() => new Set());
+  // Place_ids whose manual-generation panel is currently open. Closed by
+  // default; opened by clicking the "Manual" button on a researched row.
+  const [manualOpenIds, setManualOpenIds] = useState<Set<string>>(() => new Set());
+
+  function toggleManualPanel(placeId: string) {
+    setManualOpenIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(placeId)) next.delete(placeId);
+      else next.add(placeId);
+      return next;
+    });
+  }
 
   function closePanel(placeId: string) {
     setCollapsedIds((prev) => {
@@ -442,7 +458,7 @@ export function ResultsTable({
                   title={
                     !isResearched
                       ? "Click Research first — Generate site uses the cached dossier"
-                      : undefined
+                      : "Generate via API (paid, automated)"
                   }
                   style={!isResearched ? { opacity: 0.55 } : undefined}
                 >
@@ -457,11 +473,52 @@ export function ResultsTable({
                     "Generate site"
                   )}
                 </button>
+                {onManualSiteSave && (
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-secondary"
+                    disabled={!isResearched || anyBusy}
+                    onClick={() => toggleManualPanel(b.place_id)}
+                    title={
+                      !isResearched
+                        ? "Click Research first — manual generation uses the cached dossier"
+                        : "Generate via claude.ai web (free, copy-paste workflow)"
+                    }
+                    style={!isResearched ? { opacity: 0.55 } : undefined}
+                  >
+                    {manualOpenIds.has(b.place_id) ? "Manual ▴" : "Manual"}
+                  </button>
+                )}
               </div>
             </div>
             {isPanelOpen && dossier && (
               <DossierPanel dossier={dossier} onClose={() => closePanel(b.place_id)} />
             )}
+            {manualOpenIds.has(b.place_id) &&
+              isResearched &&
+              dossier &&
+              cachedBusiness &&
+              onManualSiteSave && (
+                <ManualGeneratePanel
+                  business={cachedBusiness}
+                  dossier={dossier}
+                  onSave={(site) => {
+                    onManualSiteSave(b.place_id, site);
+                    setManualOpenIds((prev) => {
+                      const next = new Set(prev);
+                      next.delete(b.place_id);
+                      return next;
+                    });
+                    setCollapsedSiteIds((prev) => {
+                      if (!prev.has(b.place_id)) return prev;
+                      const next = new Set(prev);
+                      next.delete(b.place_id);
+                      return next;
+                    });
+                  }}
+                  onClose={() => toggleManualPanel(b.place_id)}
+                />
+              )}
             {isSitePanelOpen && cachedSite && cachedBusiness && (
               <div
                 style={{
