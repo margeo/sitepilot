@@ -24,21 +24,25 @@ interface ModelEntry {
   inSearch: number;
 }
 
+// Pricing verified from OpenRouter / Anthropic / Google AI Studio public
+// pricing pages (2026-04-28). inPer1M / outPer1M = USD per 1M tokens.
+// inSearch = per-call surcharge (Exa for OpenRouter :online ~$0.005,
+// web_search for Anthropic direct ~$0.01 per search × ~3 rounds = $0.03).
 const MODEL_IDS: ModelEntry[] = [
-  // Gemini direct: gemini-2.5-flash
+  // Gemini direct: gemini-2.5-flash via AI Studio
   { id: undefined, label: "Gemini 2.5 Flash · default (Gemini direct + google_search)", inPer1M: 0.075, outPer1M: 0.30, inSearch: 0 },
 
-  // OpenRouter :online plugin = ~$0.005 per call for Exa search
-  { id: "openrouter:google/gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite · OpenRouter :online", inPer1M: 0.10, outPer1M: 0.40, inSearch: 0.005 },
-  { id: "openrouter:google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro · OpenRouter :online", inPer1M: 1.25, outPer1M: 5.00, inSearch: 0.005 },
+  // OpenRouter :online (Exa search +$0.005/call)
+  { id: "openrouter:google/gemini-3.1-flash-lite-preview", label: "Gemini 3.1 Flash Lite · OpenRouter :online", inPer1M: 0.25, outPer1M: 1.50, inSearch: 0.005 },
+  { id: "openrouter:google/gemini-3.1-pro-preview", label: "Gemini 3.1 Pro · OpenRouter :online", inPer1M: 2.00, outPer1M: 12.00, inSearch: 0.005 },
   { id: "openrouter:anthropic/claude-haiku-4.5", label: "Claude Haiku 4.5 · OpenRouter :online", inPer1M: 1.00, outPer1M: 5.00, inSearch: 0.005 },
   { id: "openrouter:anthropic/claude-sonnet-4.6", label: "Claude Sonnet 4.6 · OpenRouter :online", inPer1M: 3.00, outPer1M: 15.00, inSearch: 0.005 },
-  { id: "openrouter:anthropic/claude-opus-4.7", label: "Claude Opus 4.7 · OpenRouter :online", inPer1M: 15.00, outPer1M: 75.00, inSearch: 0.005 },
+  { id: "openrouter:anthropic/claude-opus-4.7", label: "Claude Opus 4.7 · OpenRouter :online", inPer1M: 5.00, outPer1M: 25.00, inSearch: 0.005 },
 
-  // Anthropic direct + web_search: $10 per 1000 searches; assume ~3 searches per call = $0.03
+  // Anthropic direct + web_search ($10/1000 searches × ~3 rounds = $0.03)
   { id: "anthropic:claude-haiku-4-5", label: "Claude Haiku 4.5 · Anthropic direct + web_search", inPer1M: 1.00, outPer1M: 5.00, inSearch: 0.03 },
   { id: "anthropic:claude-sonnet-4-6", label: "Claude Sonnet 4.6 · Anthropic direct + web_search", inPer1M: 3.00, outPer1M: 15.00, inSearch: 0.03 },
-  { id: "anthropic:claude-opus-4-7", label: "Claude Opus 4.7 · Anthropic direct + web_search", inPer1M: 15.00, outPer1M: 75.00, inSearch: 0.03 },
+  { id: "anthropic:claude-opus-4-7", label: "Claude Opus 4.7 · Anthropic direct + web_search", inPer1M: 5.00, outPer1M: 25.00, inSearch: 0.03 },
 ];
 
 function estimateCostUSD(entry: ModelEntry, inTok = 0, outTok = 0): number {
