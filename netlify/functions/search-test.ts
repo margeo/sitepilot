@@ -21,7 +21,6 @@ interface Place {
 const TIER_A = ["lodging", "hotels"];
 const TIER_B = [
   "boutique hotels",
-  "villas",
   "condos",
   "bungalows",
   "guesthouses",
