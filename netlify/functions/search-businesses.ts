@@ -204,20 +204,24 @@ interface PlacesError {
 // Single call (or paginated chain) to Places Text Search.
 // maxPages caps the pagination; Google requires a short wait between page fetches
 // for the nextPageToken to become valid, and stops issuing tokens after page 3.
+// Returns the actual number of HTTP calls made (= pages fetched, including failed ones)
+// so the frontend can compute Places API cost.
 async function placesTextSearch(args: {
   apiKey: string;
   textQuery: string;
   maxPages?: number;
   errors?: PlacesError[];
-}): Promise<Basic[]> {
+}): Promise<{ results: Basic[]; apiCalls: number }> {
   const { apiKey, textQuery, maxPages = 3, errors } = args;
   const all: Basic[] = [];
   let pageToken: string | undefined;
+  let apiCalls = 0;
 
   for (let page = 0; page < maxPages; page++) {
     const reqBody: Record<string, unknown> = { textQuery, pageSize: 20 };
     if (pageToken) reqBody.pageToken = pageToken;
 
+    apiCalls++;
     const res = await fetch(PLACES_URL, {
       method: "POST",
       headers: {
@@ -233,7 +237,7 @@ async function placesTextSearch(args: {
       const message = body.slice(0, 300) || res.statusText;
       console.warn(`[places] ${res.status} on "${textQuery}" page ${page + 1}: ${message}`);
       errors?.push({ query: textQuery, page: page + 1, status: res.status, message });
-      return all;
+      return { results: all, apiCalls };
     }
     const data = (await res.json()) as {
       places?: Array<{
@@ -267,7 +271,7 @@ async function placesTextSearch(args: {
     if (page < maxPages - 1) await new Promise((r) => setTimeout(r, 2000));
   }
 
-  return all;
+  return { results: all, apiCalls };
 }
 
 export const handler: Handler = async (event) => {
@@ -322,22 +326,28 @@ export const handler: Handler = async (event) => {
 
     // Dedupe by place_id, keep first occurrence (= earliest query gets credit).
     const byId = new Map<string, Basic>();
-    for (const list of batches) for (const b of list) if (!byId.has(b.place_id)) byId.set(b.place_id, b);
+    for (const { results: list } of batches)
+      for (const b of list) if (!byId.has(b.place_id)) byId.set(b.place_id, b);
     let raw = Array.from(byId.values());
 
     // Per-query "uniqueAdded" trace for F12 debug.
     const seen = new Set<string>();
+    let totalApiCalls = 0;
     debug.perQuery = queries.map((q, i) => {
       const batch = batches[i];
-      const newOnes = batch.filter((b) => !seen.has(b.place_id));
+      totalApiCalls += batch.apiCalls;
+      const newOnes = batch.results.filter((b) => !seen.has(b.place_id));
       for (const b of newOnes) seen.add(b.place_id);
       return {
         query: q,
-        returned: batch.length,
+        returned: batch.results.length,
+        apiCalls: batch.apiCalls,
         uniqueAdded: newOnes.length,
         newNames: newOnes.map((b) => b.name),
       };
     });
+    debug.totalApiCalls = totalApiCalls;
+    debug.queryCount = queries.length;
     debug.totalRaw = raw.length;
 
     // Post-filter 1: type whitelist (any-of). Drops "Hotel X" restaurant

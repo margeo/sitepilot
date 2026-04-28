@@ -208,6 +208,11 @@ export const MODEL_RATES: Record<DesignModelId, { inPer1M: number; outPer1M: num
   "anthropic:claude-opus-4-7":                        { inPer1M: 5.00, outPer1M: 25.00, researchSearchUSD: 0.03 },
 };
 
+// Places API (New) Text Search Pro SKU rate, used for F12 cost estimate
+// on the search phase. Verified from Google's pricing page 2026-04-28.
+// Each paginated page fetch counts as one billable call.
+export const PLACES_TEXT_SEARCH_USD_PER_CALL = 0.032;
+
 export type JobStatus = "pending" | "researching" | "designing" | "done" | "error";
 
 export interface JobRecord {

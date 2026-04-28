@@ -89,7 +89,10 @@ export default function App() {
     setSelectedSite(null);
     setLastFilters(filters);
     try {
-      const r = await searchBusinesses(filters);
+      const r = await searchBusinesses(filters, {
+        researchModelId: researchModel,
+        designModelId: designModel,
+      });
       setResults(r.businesses);
       setDemoMode(r.demo);
       setDemoNote(r.note ?? null);

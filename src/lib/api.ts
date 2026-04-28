@@ -1,5 +1,6 @@
 import {
   MODEL_RATES,
+  PLACES_TEXT_SEARCH_USD_PER_CALL,
   type BusinessBasic,
   type BusinessDetails,
   type DesignModelId,
@@ -55,17 +56,122 @@ export interface SearchResponse {
   demo: boolean;
   note?: string;
   totalFound?: number;
-  _debug?: Record<string, unknown>;
+  _debug?: {
+    perQuery?: Array<{
+      query: string;
+      returned: number;
+      apiCalls: number;
+      uniqueAdded: number;
+      newNames: string[];
+    }>;
+    totalApiCalls?: number;
+    queryCount?: number;
+    totalRaw?: number;
+    afterTypeWhitelist?: number;
+    afterLocationFilter?: number;
+    afterFinalFilters?: number;
+    errorCount?: number;
+    errors?: Array<{ query: string; page: number; status: number; message: string }>;
+  };
 }
 
-export async function searchBusinesses(filters: SearchFilters): Promise<SearchResponse> {
+export interface SearchLogContext {
+  researchModelId?: DesignModelId;
+  designModelId?: DesignModelId;
+}
+
+function modelLabelForLog(id: DesignModelId | undefined, kind: "research" | "design"): string {
+  if (!id) return "(none selected)";
+  const rates = MODEL_RATES[id];
+  if (!rates) return id;
+  // Estimate per-call cost the same way generate-site does, but with
+  // representative token counts so the user sees ballpark before running.
+  // Research: ~5k in / ~2k out + search surcharge.
+  // Design: ~8k in / ~6k out, no search surcharge.
+  if (kind === "research") {
+    const est = (5000 * rates.inPer1M + 2000 * rates.outPer1M) / 1_000_000 + rates.researchSearchUSD;
+    return `${id} (~${fmtUSD(est)}/dossier)`;
+  }
+  const est = (8000 * rates.inPer1M + 6000 * rates.outPer1M) / 1_000_000;
+  return `${id} (~${fmtUSD(est)}/site)`;
+}
+
+export async function searchBusinesses(
+  filters: SearchFilters,
+  ctx: SearchLogContext = {},
+): Promise<SearchResponse> {
+  const t0 = performance.now();
   console.log("[search] →", filters);
   const res = await post<SearchResponse>("search-businesses", filters);
-  console.log("[search] ←", {
-    matches: res.businesses.length,
-    totalFound: res.totalFound,
-    debug: res._debug,
+  const elapsedMs = performance.now() - t0;
+
+  const dbg = res._debug ?? {};
+  const apiCalls = dbg.totalApiCalls ?? 0;
+  const placesCostUSD = apiCalls * PLACES_TEXT_SEARCH_USD_PER_CALL;
+
+  console.groupCollapsed(
+    `%c[search] DONE — ${filters.sector} in ${filters.location} — ${res.businesses.length} matches — ${fmtUSD(placesCostUSD)} — ${(elapsedMs / 1000).toFixed(1)}s`,
+    "color: #5fa; font-weight: bold;",
+  );
+
+  console.table({
+    sector: { value: filters.sector },
+    location: { value: filters.location },
+    queries_fired: { value: dbg.queryCount ?? "—" },
+    api_calls: { value: apiCalls },
+    places_cost_USD: { value: fmtUSD(placesCostUSD) },
+    elapsed_s: { value: (elapsedMs / 1000).toFixed(1) },
   });
+
+  console.log("Funnel:");
+  console.table({
+    "raw (deduped)": { count: dbg.totalRaw ?? "—" },
+    "after type whitelist": { count: dbg.afterTypeWhitelist ?? "—" },
+    "after location filter": { count: dbg.afterLocationFilter ?? "—" },
+    "after final filters (rating/reviews/website/maxResults)": {
+      count: dbg.afterFinalFilters ?? "—",
+    },
+  });
+
+  console.log(
+    "%cSelected models for next phase (Generate Site):",
+    "color: #fa5; font-weight: bold;",
+  );
+  console.table({
+    "Research model": { id_and_estimate: modelLabelForLog(ctx.researchModelId, "research") },
+    "Design model": { id_and_estimate: modelLabelForLog(ctx.designModelId, "design") },
+  });
+
+  if (dbg.perQuery && dbg.perQuery.length > 0) {
+    console.groupCollapsed(`Per-query breakdown (${dbg.perQuery.length})`);
+    console.table(
+      Object.fromEntries(
+        dbg.perQuery.map((q) => [
+          q.query,
+          {
+            api_calls: q.apiCalls,
+            returned: q.returned,
+            unique_added: q.uniqueAdded,
+            new_names_sample: q.newNames.slice(0, 3).join(", ") + (q.newNames.length > 3 ? "…" : ""),
+          },
+        ]),
+      ),
+    );
+    console.groupEnd();
+  }
+
+  if (dbg.errorCount && dbg.errorCount > 0) {
+    console.warn(`Places API errors: ${dbg.errorCount}`, dbg.errors);
+  }
+
+  console.log("Raw response:", res);
+  console.groupEnd();
+
+  // Save full result + context for ad-hoc inspection later (window._lastSearch).
+  (
+    window as unknown as { _lastSearch?: { filters: SearchFilters; response: SearchResponse; elapsedMs: number; ctx: SearchLogContext; placesCostUSD: number } }
+  )._lastSearch = { filters, response: res, elapsedMs, ctx, placesCostUSD };
+
   return res;
 }
 
