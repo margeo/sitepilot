@@ -44,7 +44,10 @@ export default async (req: Request, _context: Context) => {
     );
   }
 
-  const baseUrl = process.env.URL || process.env.DEPLOY_URL || "http://localhost:8888";
+  // DEPLOY_URL is the current deploy's URL (branch preview or prod). Falls
+  // back to URL (always prod) only if DEPLOY_URL isn't set. Wrong order
+  // breaks branch deploys because they'd call prod and miss new functions.
+  const baseUrl = process.env.DEPLOY_URL || process.env.URL || "http://localhost:8888";
   const bgUrl = `${baseUrl}/.netlify/functions/research-compare-background`;
 
   try {
