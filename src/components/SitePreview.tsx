@@ -5,9 +5,34 @@ interface Props {
   site: GeneratedSite;
 }
 
+// Generated sites reference photos via relative URLs like
+// "/.netlify/functions/photos?reference=...". Those resolve fine in the
+// preview iframe (which inherits the parent page's origin) but break the
+// moment we open the HTML in a new tab via blob: URL or save it to disk —
+// blob/file documents have no useful base, so the browser can't reach the
+// SitePilot host to fetch /photos. Injecting a <base href="...">
+// tag lets every relative URL resolve back to dev/prod regardless of
+// where the document is opened.
+function injectBaseHref(html: string, origin: string): string {
+  const baseTag = `<base href="${origin}/">`;
+  // Don't double-inject if the model already emitted one.
+  if (/<base\b/i.test(html)) return html;
+  if (/<head[^>]*>/i.test(html)) {
+    return html.replace(/<head[^>]*>/i, (m) => `${m}\n  ${baseTag}`);
+  }
+  if (/<html[^>]*>/i.test(html)) {
+    return html.replace(/<html[^>]*>/i, (m) => `${m}\n<head>${baseTag}</head>`);
+  }
+  return `<head>${baseTag}</head>${html}`;
+}
+
 export function SitePreview({ business, site }: Props) {
+  function htmlForExport(): string {
+    return injectBaseHref(site.html, window.location.origin);
+  }
+
   function download() {
-    const blob = new Blob([site.html], { type: "text/html;charset=utf-8" });
+    const blob = new Blob([htmlForExport()], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     const slug = business.name
@@ -23,7 +48,7 @@ export function SitePreview({ business, site }: Props) {
   }
 
   function openInNewTab() {
-    const blob = new Blob([site.html], { type: "text/html;charset=utf-8" });
+    const blob = new Blob([htmlForExport()], { type: "text/html;charset=utf-8" });
     const url = URL.createObjectURL(blob);
     window.open(url, "_blank", "noopener");
   }
