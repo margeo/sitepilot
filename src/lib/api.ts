@@ -381,3 +381,17 @@ export function extractListings(
     locationHint,
   });
 }
+
+export interface ResolveNamesResponse {
+  businesses: BusinessBasic[];
+  requested: string[];
+  missing: string[];
+  apiCalls: number;
+}
+
+export function resolveNames(
+  names: string[],
+  locationHint?: string,
+): Promise<ResolveNamesResponse> {
+  return post<ResolveNamesResponse>("resolve-names", { names, locationHint });
+}

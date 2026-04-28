@@ -3,12 +3,14 @@ import "./App.css";
 import { SearchForm } from "./components/SearchForm";
 import { ResultsTable } from "./components/ResultsTable";
 import { ScreenshotImport } from "./components/ScreenshotImport";
+import { ManualImport } from "./components/ManualImport";
 import {
   fetchDetails,
   generateSite,
   phaseCostUSD,
   researchBusiness,
   searchBusinesses,
+  type SearchResponse,
 } from "./lib/api";
 import type {
   BusinessBasic,
@@ -90,6 +92,7 @@ export default function App() {
   const LS_DOSSIER_KEY = "sitepilot.cache.dossier.v1";
   const LS_SITE_KEY = "sitepilot.cache.site.v1";
   const LS_BUSINESS_KEY = "sitepilot.cache.business.v1";
+  const LS_SEARCH_KEY = "sitepilot.cache.search.v1";
 
   function loadMap<V>(key: string): Map<string, V> {
     try {
@@ -111,6 +114,17 @@ export default function App() {
   const [businessByPlaceId, setBusinessByPlaceId] = useState<Map<string, BusinessDetails>>(
     () => loadMap<BusinessDetails>(LS_BUSINESS_KEY),
   );
+  // Cache of full search responses keyed by JSON.stringify(filters). Lets the
+  // app re-show prior searches without burning Places API calls. The
+  // operator can force a fresh fetch via the Refresh button in the
+  // results header (covered below).
+  const [searchCacheByKey, setSearchCacheByKey] = useState<Map<string, SearchResponse>>(
+    () => loadMap<SearchResponse>(LS_SEARCH_KEY),
+  );
+  // True when the currently-displayed results came out of searchCacheByKey
+  // rather than a fresh /search-businesses call. Drives the "(cached)" pill
+  // + Refresh button in the main pane header.
+  const [lastWasCached, setLastWasCached] = useState(false);
 
   // Mirror each cache to localStorage on every update.
   useEffect(() => {
@@ -137,6 +151,18 @@ export default function App() {
       );
     } catch {}
   }, [businessByPlaceId]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        LS_SEARCH_KEY,
+        JSON.stringify(Array.from(searchCacheByKey.entries())),
+      );
+    } catch {}
+  }, [searchCacheByKey]);
+
+  function searchCacheKey(filters: SearchFilters): string {
+    return JSON.stringify(filters);
+  }
 
   // Summary of the most recent successful Research click — surfaced as a
   // banner in the main pane so the user can see at a glance what came back
@@ -165,11 +191,29 @@ export default function App() {
       .catch(() => {});
   }, []);
 
-  async function runSearch(filters: SearchFilters) {
+  async function runSearch(filters: SearchFilters, opts: { bypassCache?: boolean } = {}) {
     setError(null);
     setSearching(true);
     setSelectedId(undefined);
     setLastFilters(filters);
+
+    const key = searchCacheKey(filters);
+    const cached = opts.bypassCache ? undefined : searchCacheByKey.get(key);
+    if (cached) {
+      console.log("%c[search cached] HIT —", "color: #fa5; font-weight: bold;", filters, {
+        matches: cached.businesses.length,
+        totalFound: cached.totalFound,
+      });
+      setResults(cached.businesses);
+      setDemoMode(cached.demo);
+      setDemoNote(cached.note ?? null);
+      setTotalFound(cached.totalFound);
+      setSearchRev((n) => n + 1);
+      setLastWasCached(true);
+      setSearching(false);
+      return;
+    }
+
     try {
       const r = await searchBusinesses(filters);
       setResults(r.businesses);
@@ -177,12 +221,25 @@ export default function App() {
       setDemoNote(r.note ?? null);
       setTotalFound(r.totalFound);
       setSearchRev((n) => n + 1);
+      setLastWasCached(false);
+      // Persist for next time (only when the call really hit Google — demo
+      // responses still get cached but they're cheap, no harm).
+      setSearchCacheByKey((prev) => {
+        const next = new Map(prev);
+        next.set(key, r);
+        return next;
+      });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
       setResults([]);
     } finally {
       setSearching(false);
     }
+  }
+
+  function refreshFromGoogle() {
+    if (!lastFilters) return;
+    runSearch(lastFilters, { bypassCache: true });
   }
 
   async function runResearch(b: BusinessBasic) {
@@ -283,6 +340,32 @@ export default function App() {
     }
   }
 
+  // Shared by ScreenshotImport and ManualImport — merge a freshly resolved
+  // batch into the visible results, dedupe by place_id, and seed lastFilters
+  // so the main-pane header has something sensible to show.
+  function mergeImported(businesses: BusinessBasic[], names: string[]) {
+    setError(null);
+    if (businesses.length === 0) return;
+    setResults((prev) => {
+      const byId = new Map<string, BusinessBasic>();
+      for (const b of prev) byId.set(b.place_id, b);
+      for (const b of businesses) byId.set(b.place_id, b);
+      return Array.from(byId.values());
+    });
+    setLastFilters(
+      (prev) =>
+        prev ?? {
+          sector: "restaurants_tavernas",
+          location: `imported: ${names.slice(0, 3).join(", ")}${names.length > 3 ? "…" : ""}`,
+          noWebsiteOnly: false,
+          minRating: 0,
+          minReviews: 0,
+          maxResults: 60,
+        },
+    );
+    setSearchRev((n) => n + 1);
+  }
+
   return (
     <div className="app">
       <aside className="sidebar">
@@ -314,48 +397,48 @@ export default function App() {
         />
 
         {demoMode === false && (
-          <div style={{ marginTop: 20 }}>
-            <div
-              style={{
-                fontSize: 11,
-                textTransform: "uppercase",
-                letterSpacing: "0.06em",
-                color: "var(--text-muted)",
-                marginBottom: 8,
-              }}
-            >
-              Or import from screenshot
+          <>
+            <div className="filter-card" style={{ marginTop: 14 }}>
+              <h3>Or paste names manually</h3>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--text-muted)",
+                  marginTop: -4,
+                  marginBottom: 12,
+                }}
+              >
+                One business name per line. Each fires a single Google Places
+                Text Search call (~$0.032/name) — much cheaper than a sector
+                search when you already know what you want.
+              </div>
+              <ManualImport
+                locationHint={lastFilters?.location}
+                onImported={mergeImported}
+                onError={(msg) => setError(msg)}
+              />
             </div>
-            <ScreenshotImport
-              locationHint={lastFilters?.location}
-              onImported={(businesses, names) => {
-                setError(null);
-                if (businesses.length > 0) {
-                  // Merge with existing results, dedupe by place_id.
-                  setResults((prev) => {
-                    const byId = new Map<string, BusinessBasic>();
-                    for (const b of prev) byId.set(b.place_id, b);
-                    for (const b of businesses) byId.set(b.place_id, b);
-                    return Array.from(byId.values());
-                  });
-                  setLastFilters(
-                    (prev) =>
-                      prev ?? {
-                        sector: "restaurants_tavernas",
-                        location: `imported: ${names.slice(0, 3).join(", ")}${names.length > 3 ? "…" : ""}`,
-                        noWebsiteOnly: false,
-                        minRating: 0,
-                        minReviews: 0,
-                        maxResults: 60,
-                        searchDepth: "quick",
-                      },
-                  );
-                  setSearchRev((n) => n + 1);
-                }
-              }}
-              onError={(msg) => setError(msg)}
-            />
-          </div>
+
+            <div className="filter-card" style={{ marginTop: 14 }}>
+              <h3>Or drop a Google Maps screenshot</h3>
+              <div
+                style={{
+                  fontSize: 11,
+                  color: "var(--text-muted)",
+                  marginTop: -4,
+                  marginBottom: 12,
+                }}
+              >
+                Gemini extracts visible business names → each is resolved via
+                Google Places. Useful when you've already screenshotted a list.
+              </div>
+              <ScreenshotImport
+                locationHint={lastFilters?.location}
+                onImported={mergeImported}
+                onError={(msg) => setError(msg)}
+              />
+            </div>
+          </>
         )}
 
         <div style={{ marginTop: 20, fontSize: 12, color: "var(--text-muted)" }}>
@@ -371,8 +454,42 @@ export default function App() {
               ? `Results — ${lastFilters.sector} in ${lastFilters.location}`
               : "Search for businesses to begin"}
           </h2>
-          <div style={{ color: "var(--text-muted)", fontSize: 12 }}>
-            {results.length > 0 && `${results.length} matches`}
+          <div
+            style={{
+              color: "var(--text-muted)",
+              fontSize: 12,
+              display: "flex",
+              alignItems: "center",
+              gap: 10,
+            }}
+          >
+            {results.length > 0 && <span>{results.length} matches</span>}
+            {lastWasCached && results.length > 0 && (
+              <>
+                <span
+                  title="Served from your local search cache — no Google Places calls were made for this view."
+                  style={{
+                    background: "var(--accent-soft)",
+                    color: "var(--accent)",
+                    border: "1px solid var(--accent)",
+                    borderRadius: 999,
+                    padding: "1px 8px",
+                    fontSize: 11,
+                    fontWeight: 600,
+                  }}
+                >
+                  cached
+                </span>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-secondary"
+                  onClick={refreshFromGoogle}
+                  title="Re-run this search against Google Places (paid)"
+                >
+                  Refresh from Google
+                </button>
+              </>
+            )}
           </div>
         </div>
 
