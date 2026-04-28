@@ -77,7 +77,14 @@ export default function App() {
   const [researchingId, setResearchingId] = useState<string | undefined>();
   const [generationStatus, setGenerationStatus] = useState<JobStatus | null>(null);
   const [generationElapsed, setGenerationElapsed] = useState<number>(0);
-  const [lastFilters, setLastFilters] = useState<SearchFilters | null>(null);
+  const [lastFilters, setLastFilters] = useState<SearchFilters | null>(() => {
+    try {
+      const raw = window.localStorage.getItem(LS_LAST_FILTERS_KEY);
+      return raw ? (JSON.parse(raw) as SearchFilters) : null;
+    } catch {
+      return null;
+    }
+  });
 
   // Per-row caches. All three are persisted to localStorage so research +
   // generated sites survive a page refresh — the user pays once per row,
@@ -93,6 +100,11 @@ export default function App() {
   const LS_SITE_KEY = "sitepilot.cache.site.v1";
   const LS_BUSINESS_KEY = "sitepilot.cache.business.v1";
   const LS_SEARCH_KEY = "sitepilot.cache.search.v1";
+  // Last filter set the operator searched. Persisting just this lets us
+  // restore the displayed results from the search cache on page reload —
+  // the searchCacheByKey already has the SearchResponse, we just need to
+  // know which one to pluck out and display.
+  const LS_LAST_FILTERS_KEY = "sitepilot.last.filters.v1";
 
   function loadMap<V>(key: string): Map<string, V> {
     try {
@@ -159,10 +171,37 @@ export default function App() {
       );
     } catch {}
   }, [searchCacheByKey]);
+  useEffect(() => {
+    try {
+      if (lastFilters) {
+        window.localStorage.setItem(LS_LAST_FILTERS_KEY, JSON.stringify(lastFilters));
+      } else {
+        window.localStorage.removeItem(LS_LAST_FILTERS_KEY);
+      }
+    } catch {}
+  }, [lastFilters]);
 
   function searchCacheKey(filters: SearchFilters): string {
     return JSON.stringify(filters);
   }
+
+  // On mount: if we have a remembered lastFilters AND its SearchResponse is
+  // still in the cache, hydrate the visible results so the operator sees
+  // their last search immediately — no Google Places call, no second click.
+  useEffect(() => {
+    if (!lastFilters) return;
+    const cached = searchCacheByKey.get(searchCacheKey(lastFilters));
+    if (!cached) return;
+    setResults(cached.businesses);
+    setDemoMode(cached.demo);
+    setDemoNote(cached.note ?? null);
+    setTotalFound(cached.totalFound);
+    setLastWasCached(true);
+    setSearchRev((n) => n + 1);
+    // Run once on mount only; later changes to lastFilters / searchCacheByKey
+    // come from runSearch which already paints the UI itself.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Summary of the most recent successful Research click — surfaced as a
   // banner in the main pane so the user can see at a glance what came back
