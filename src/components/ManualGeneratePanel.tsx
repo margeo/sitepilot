@@ -1,21 +1,62 @@
 import { useEffect, useState } from "react";
 import { buildDesignPrompt, extractHtmlFromPaste } from "../lib/api";
-import { MODEL_RATES, type BusinessDetails, type GeneratedSite } from "../types";
+import type { BusinessDetails, GeneratedSite } from "../types";
 
-// Token estimate from char count. Claude's tokenizer averages ~4 chars per
-// token for English prose, ~3-3.5 for code/HTML. We use 4 as a rough,
-// always-rounded-down number and label it "~" everywhere it's displayed.
+// The three flat-rate web subscriptions we support routing the design call
+// through. Each gets its own button in Step 1. The selectedProvider drives
+// what we record on the saved site (model name + which API rates to use
+// for the "equivalent cost" comparison).
+type ProviderId = "claude" | "chatgpt" | "gemini";
+
+interface ProviderConfig {
+  label: string; // shown on the button + in the metadata
+  modelLabel: string; // saved into site.model
+  apiModel: string; // saved into site.api_equivalent_model for traceability
+  newChatUrl: string; // opens in a new tab when the operator clicks Copy & open
+  inPer1M: number; // USD per 1M input tokens on the equivalent direct API
+  outPer1M: number; // USD per 1M output tokens on the equivalent direct API
+}
+
+// Rates verified from each provider's public pricing page 2026-04-28.
+// Numbers are best-current-tier ("flagship" quality, what each web app
+// serves to a paid subscriber):
+//   claude.ai Pro/Max → Opus 4.7 (Anthropic direct rate card)
+//   ChatGPT Plus/Pro → GPT-4.1 (OpenAI rate card)
+//   Gemini Advanced  → Gemini 2.5 Pro (Google rate card)
+const PROVIDERS: Record<ProviderId, ProviderConfig> = {
+  claude: {
+    label: "Claude",
+    modelLabel: "claude.ai (web)",
+    apiModel: "anthropic:claude-opus-4-7",
+    newChatUrl: "https://claude.ai/new",
+    inPer1M: 5.0,
+    outPer1M: 25.0,
+  },
+  chatgpt: {
+    label: "ChatGPT",
+    modelLabel: "chatgpt (web)",
+    apiModel: "openai:gpt-4.1",
+    newChatUrl: "https://chatgpt.com/",
+    inPer1M: 2.0,
+    outPer1M: 8.0,
+  },
+  gemini: {
+    label: "Gemini",
+    modelLabel: "gemini (web)",
+    apiModel: "google:gemini-2.5-pro",
+    newChatUrl: "https://gemini.google.com/app",
+    inPer1M: 1.25,
+    outPer1M: 10.0,
+  },
+};
+
 function estimateTokens(text: string): number {
   return Math.round(text.length / 4);
 }
 
-// Equivalent API cost if this generation had run via the Anthropic-direct
-// API on Opus 4.7 (the model Claude.ai Max serves on the "Adaptive" mode).
-// Assumes the cached MODEL_RATES entry — same source of truth as F12 logger.
-function equivalentApiCostUSD(inTok: number, outTok: number): number {
-  const rates = MODEL_RATES["anthropic:claude-opus-4-7"];
-  if (!rates) return 0;
-  return (inTok * rates.inPer1M + outTok * rates.outPer1M) / 1_000_000;
+function equivalentApiCostUSD(provider: ProviderId, inTok: number, outTok: number): number {
+  const cfg = PROVIDERS[provider];
+  return (inTok * cfg.inPer1M + outTok * cfg.outPer1M) / 1_000_000;
 }
 
 function fmtUSD(n: number): string {
@@ -45,6 +86,10 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
   const [promptError, setPromptError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [showFullPrompt, setShowFullPrompt] = useState(false);
+  // Which provider the operator most recently chose to route through. Drives
+  // the model name + cost rates recorded at save time so the saved site
+  // metadata matches what really produced it.
+  const [provider, setProvider] = useState<ProviderId>("claude");
 
   // Fetch the prompt once on mount. Cheap (text only, no AI), but cache it
   // in component state so toggling the panel open/closed doesn't refetch.
@@ -70,14 +115,20 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
     };
   }, [business, dossier]);
 
-  async function copyAndOpenClaude() {
+  async function copyAndOpen(target: ProviderId) {
     if (!prompt) return;
+    setProvider(target);
+    const cfg = PROVIDERS[target];
     try {
       await navigator.clipboard.writeText(prompt);
-      window.open("https://claude.ai/new", "_blank", "noopener,noreferrer");
-      setNote("Copied. Paste it in the new Claude tab (Ctrl/Cmd+V), wait for the response, copy the HTML (Ctrl/Cmd+A then Ctrl/Cmd+C), come back here and click Paste & save.");
+      window.open(cfg.newChatUrl, "_blank", "noopener,noreferrer");
+      setNote(
+        `Copied. Paste in the new ${cfg.label} tab (Ctrl/Cmd+V), wait for the response, copy the HTML (Ctrl/Cmd+A then Ctrl/Cmd+C), come back here and click Paste & save. Saving as: ${cfg.label}.`,
+      );
     } catch (err) {
-      setNote(`Could not write to clipboard: ${err instanceof Error ? err.message : String(err)}. Use the "Show prompt" button below to copy manually.`);
+      setNote(
+        `Could not write to clipboard: ${err instanceof Error ? err.message : String(err)}. Use "Show prompt" to copy manually.`,
+      );
     }
   }
 
@@ -109,28 +160,29 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
       return;
     }
     const trimmedUrl = chatUrl.trim();
+    const cfg = PROVIDERS[provider];
     const inTok = prompt ? estimateTokens(prompt) : 0;
     const outTok = estimateTokens(raw);
-    const apiCost = equivalentApiCostUSD(inTok, outTok);
+    const apiCost = equivalentApiCostUSD(provider, inTok, outTok);
     const site: GeneratedSite = {
       html,
       seo_keywords: [],
       generated_by: "manual",
-      provider: "manual",
-      model: "claude.ai (web)",
+      provider: `manual:${provider}`,
+      model: cfg.modelLabel,
       input_tokens_estimate: inTok,
       output_tokens_estimate: outTok,
       api_equivalent_cost_usd: apiCost,
-      api_equivalent_model: "anthropic:claude-opus-4-7",
+      api_equivalent_model: cfg.apiModel,
       ...(trimmedUrl && /^https?:\/\//i.test(trimmedUrl)
         ? { claude_chat_url: trimmedUrl }
         : {}),
     };
     // F12 log group — mirrors [generate]/[design] for symmetry. Marginal
-    // cost is always $0 since claude.ai is flat-rate; the dollar figure is
-    // what the same job would have billed via the API.
+    // cost is always $0 since the web subscription is flat-rate; the
+    // dollar figure is what the same job would have billed via the API.
     console.groupCollapsed(
-      `%c[manual] DONE — ${business.name} — ~${fmtUSD(apiCost)} equivalent (Opus 4.7) — $0 actual`,
+      `%c[manual:${provider}] DONE — ${business.name} — ~${fmtUSD(apiCost)} equivalent (${cfg.apiModel}) — $0 actual`,
       "color: #5fa; font-weight: bold;",
     );
     console.table({
@@ -142,12 +194,12 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
         chars: raw.length,
         tokens_est: fmtTokens(outTok),
       },
-      "Equivalent API cost (Opus 4.7)": {
+      [`Equivalent API cost (${cfg.apiModel})`]: {
         chars: "—",
         tokens_est: fmtUSD(apiCost),
       },
     });
-    console.log("Marginal cost on Claude.ai Max subscription: $0");
+    console.log(`Marginal cost on ${cfg.label} web subscription: $0`);
     if (trimmedUrl) console.log("Chat URL:", trimmedUrl);
     console.groupEnd();
 
@@ -155,7 +207,7 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
     setPastedText("");
     setChatUrl("");
     setNote(
-      `Saved · ~${fmtTokens(inTok)} in + ~${fmtTokens(outTok)} out tokens · ~${fmtUSD(apiCost)} equivalent if API · $0 actual${trimmedUrl ? " · chat URL recorded" : ""}.`,
+      `Saved as ${cfg.label} · ~${fmtTokens(inTok)} in + ~${fmtTokens(outTok)} out tokens · ~${fmtUSD(apiCost)} equivalent if API (${cfg.apiModel}) · $0 actual${trimmedUrl ? " · chat URL recorded" : ""}.`,
     );
   }
 
@@ -207,7 +259,7 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
           paddingRight: 32,
         }}
       >
-        Manual generation · via claude.ai (free)
+        Manual generation · web subscription (free)
       </div>
 
       {loadingPrompt && (
@@ -224,19 +276,27 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
         <>
           <div style={{ marginBottom: 12 }}>
             <div style={{ color: "var(--text-muted)", marginBottom: 6 }}>
-              <strong style={{ color: "var(--text)" }}>Step 1.</strong> Copy the designer
-              prompt and open a new Claude chat. Paste the prompt there and let Claude
-              produce the HTML.
+              <strong style={{ color: "var(--text)" }}>Step 1.</strong> Pick a provider
+              — copies the prompt to clipboard and opens a new chat in that tab. Same
+              identical prompt to all three so you can compare outputs.
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
-              <button
-                type="button"
-                className="btn btn-sm"
-                onClick={copyAndOpenClaude}
-                disabled={!prompt}
-              >
-                Copy prompt &amp; open Claude
-              </button>
+              {(["claude", "chatgpt", "gemini"] as ProviderId[]).map((p) => {
+                const cfg = PROVIDERS[p];
+                const active = provider === p;
+                return (
+                  <button
+                    key={p}
+                    type="button"
+                    className={`btn btn-sm ${active ? "" : "btn-secondary"}`}
+                    onClick={() => copyAndOpen(p)}
+                    disabled={!prompt}
+                    title={`Copy prompt and open ${cfg.label} (~$${cfg.inPer1M}/M in, $${cfg.outPer1M}/M out via API)`}
+                  >
+                    {active ? `→ ${cfg.label}` : `Open ${cfg.label}`}
+                  </button>
+                );
+              })}
               <button
                 type="button"
                 className="btn btn-sm btn-secondary"
@@ -268,9 +328,10 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
 
           <div style={{ marginBottom: 8 }}>
             <div style={{ color: "var(--text-muted)", marginBottom: 6 }}>
-              <strong style={{ color: "var(--text)" }}>Step 2.</strong> Paste Claude's HTML
-              response. The fastest way: copy it in the Claude tab, come back here, click
-              the green button — it reads from clipboard, extracts the HTML, and saves.
+              <strong style={{ color: "var(--text)" }}>Step 2.</strong> Paste the HTML
+              response from <strong style={{ color: "var(--accent)" }}>{PROVIDERS[provider].label}</strong>.
+              The fastest way: copy it in that tab, come back here, click the green
+              button — clipboard read + extract + save.
             </div>
             <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginBottom: 8 }}>
               <button
@@ -278,7 +339,7 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
                 className="btn btn-sm"
                 onClick={pasteFromClipboardAndSave}
               >
-                Paste from clipboard &amp; save
+                Paste from clipboard &amp; save as {PROVIDERS[provider].label}
               </button>
               <button
                 type="button"
