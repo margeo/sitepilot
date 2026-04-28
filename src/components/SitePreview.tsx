@@ -103,6 +103,33 @@ export function SitePreview({ business, site }: Props) {
               </a>
             </div>
           )}
+          {(typeof site.input_tokens_estimate === "number" ||
+            typeof site.output_tokens_estimate === "number") && (
+            <div className="meta-row">
+              <span className="lbl">Tokens (est.)</span>
+              <span>
+                {(site.input_tokens_estimate ?? 0).toLocaleString("en-US")} in
+                {" + "}
+                {(site.output_tokens_estimate ?? 0).toLocaleString("en-US")} out
+              </span>
+            </div>
+          )}
+          {typeof site.api_equivalent_cost_usd === "number" && (
+            <div
+              className="meta-row"
+              title={
+                site.api_equivalent_model
+                  ? `What this generation would have cost if routed through ${site.api_equivalent_model} via the API. Actual marginal cost on Claude.ai Max: $0.`
+                  : undefined
+              }
+            >
+              <span className="lbl">API-equiv cost</span>
+              <span>
+                ~${site.api_equivalent_cost_usd.toFixed(4)}
+                <span style={{ color: "var(--text-muted)" }}> · actual $0</span>
+              </span>
+            </div>
+          )}
         </div>
 
         {site.suggested_pages && site.suggested_pages.length > 0 && (

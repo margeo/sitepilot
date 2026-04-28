@@ -88,6 +88,13 @@ export interface GeneratedSite {
   // path only). Lets the operator reopen the original conversation to see
   // Claude's full reasoning, ask follow-up tweaks, or share the chat URL.
   claude_chat_url?: string;
+  // Token + API-equivalent cost estimate captured at save time. claude.ai
+  // web is flat-rate so the actual cost is $0 marginal — these numbers are
+  // "what would this have cost via the API" for value comparison.
+  input_tokens_estimate?: number;
+  output_tokens_estimate?: number;
+  api_equivalent_cost_usd?: number;
+  api_equivalent_model?: string; // which model's pricing was applied
 }
 
 // Design-model dropdown values. Backend validates against an allow-list

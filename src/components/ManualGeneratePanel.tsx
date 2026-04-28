@@ -1,6 +1,30 @@
 import { useEffect, useState } from "react";
 import { buildDesignPrompt, extractHtmlFromPaste } from "../lib/api";
-import type { BusinessDetails, GeneratedSite } from "../types";
+import { MODEL_RATES, type BusinessDetails, type GeneratedSite } from "../types";
+
+// Token estimate from char count. Claude's tokenizer averages ~4 chars per
+// token for English prose, ~3-3.5 for code/HTML. We use 4 as a rough,
+// always-rounded-down number and label it "~" everywhere it's displayed.
+function estimateTokens(text: string): number {
+  return Math.round(text.length / 4);
+}
+
+// Equivalent API cost if this generation had run via the Anthropic-direct
+// API on Opus 4.7 (the model Claude.ai Max serves on the "Adaptive" mode).
+// Assumes the cached MODEL_RATES entry — same source of truth as F12 logger.
+function equivalentApiCostUSD(inTok: number, outTok: number): number {
+  const rates = MODEL_RATES["anthropic:claude-opus-4-7"];
+  if (!rates) return 0;
+  return (inTok * rates.inPer1M + outTok * rates.outPer1M) / 1_000_000;
+}
+
+function fmtUSD(n: number): string {
+  return "$" + n.toFixed(4);
+}
+
+function fmtTokens(n: number): string {
+  return n.toLocaleString("en-US");
+}
 
 interface Props {
   business: BusinessDetails;
@@ -85,23 +109,53 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
       return;
     }
     const trimmedUrl = chatUrl.trim();
+    const inTok = prompt ? estimateTokens(prompt) : 0;
+    const outTok = estimateTokens(raw);
+    const apiCost = equivalentApiCostUSD(inTok, outTok);
     const site: GeneratedSite = {
       html,
       seo_keywords: [],
       generated_by: "manual",
       provider: "manual",
       model: "claude.ai (web)",
+      input_tokens_estimate: inTok,
+      output_tokens_estimate: outTok,
+      api_equivalent_cost_usd: apiCost,
+      api_equivalent_model: "anthropic:claude-opus-4-7",
       ...(trimmedUrl && /^https?:\/\//i.test(trimmedUrl)
         ? { claude_chat_url: trimmedUrl }
         : {}),
     };
+    // F12 log group — mirrors [generate]/[design] for symmetry. Marginal
+    // cost is always $0 since claude.ai is flat-rate; the dollar figure is
+    // what the same job would have billed via the API.
+    console.groupCollapsed(
+      `%c[manual] DONE — ${business.name} — ~${fmtUSD(apiCost)} equivalent (Opus 4.7) — $0 actual`,
+      "color: #5fa; font-weight: bold;",
+    );
+    console.table({
+      "Input (prompt)": {
+        chars: prompt ? prompt.length : 0,
+        tokens_est: fmtTokens(inTok),
+      },
+      "Output (HTML)": {
+        chars: raw.length,
+        tokens_est: fmtTokens(outTok),
+      },
+      "Equivalent API cost (Opus 4.7)": {
+        chars: "—",
+        tokens_est: fmtUSD(apiCost),
+      },
+    });
+    console.log("Marginal cost on Claude.ai Max subscription: $0");
+    if (trimmedUrl) console.log("Chat URL:", trimmedUrl);
+    console.groupEnd();
+
     onSave(site);
     setPastedText("");
     setChatUrl("");
     setNote(
-      trimmedUrl
-        ? "Saved with chat URL — you can reopen the Claude conversation from the site preview."
-        : "Saved. The site preview should now appear under this row.",
+      `Saved · ~${fmtTokens(inTok)} in + ~${fmtTokens(outTok)} out tokens · ~${fmtUSD(apiCost)} equivalent if API · $0 actual${trimmedUrl ? " · chat URL recorded" : ""}.`,
     );
   }
 
