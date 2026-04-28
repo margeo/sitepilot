@@ -274,6 +274,18 @@ export const PALETTES: DesignOption[] = [
     description:
       "Deep brown #3d2817 dominant. Cream secondary. Barber red #c41e3a accent. Vintage barber.",
   },
+  {
+    slug: "turquoise-coral-sand",
+    label: "Turquoise · coral · sand",
+    description:
+      "Turquoise #2c8b9a dominant. Coral #ff6b6b accent. Sand #f5e6d3 background. Beach bar / summer bright.",
+  },
+  {
+    slug: "blush-burgundy-cream",
+    label: "Blush · burgundy · cream",
+    description:
+      "Blush #f5d5d5 dominant. Deep burgundy accent. Cream background. Beauty / nails / soft refined.",
+  },
 ];
 
 // 6 mood-grouped typography pairs. Each is a Google Fonts pairing the
@@ -315,6 +327,311 @@ export const TYPOGRAPHY: DesignOption[] = [
     label: "Vintage classical (Playfair + Bebas)",
     description:
       "Display: Playfair Display (high-contrast serif) OR Bebas Neue (condensed sans for impact). Body: Inter. Vintage poster / barber / industrial.",
+  },
+];
+
+// =====================================================================
+// SECTOR PRESETS — Phase 3
+// One-click bundles per sector. Selecting a preset auto-fills the three
+// design slots (aesthetic / palette / typography) so the operator can
+// jump straight into a sensible default for their sector. After applying,
+// each individual slot can still be overridden.
+//
+// Some sectors have multiple variants (cafes: specialty / cocktail /
+// beach; accommodations: Cycladic / mountain / luxury; beauty: spa / nails;
+// barbers: vintage / modern). Each variant is a separate entry — the
+// dropdown filters by the currently-selected sector.
+// =====================================================================
+
+import type { Sector } from "./types";
+
+export interface SectorPreset {
+  slug: string; // unique
+  label: string; // shown in the preset dropdown
+  sector: Sector;
+  variant?: string; // descriptive variant label, surfaced in preset label
+  aestheticSlug: string; // must match a slug in AESTHETICS
+  paletteSlug: string; // must match a slug in PALETTES
+  typographySlug: string; // must match a slug in TYPOGRAPHY
+}
+
+export const SECTOR_PRESETS: SectorPreset[] = [
+  // Restaurants & Tavernas
+  {
+    slug: "restaurants-editorial-navy",
+    label: "Editorial warm · navy + sun + paper",
+    sector: "restaurants_tavernas",
+    aestheticSlug: "editorial-mediterranean",
+    paletteSlug: "navy-sun-paper",
+    typographySlug: "editorial-serif",
+  },
+  {
+    slug: "restaurants-rustic-charcoal",
+    label: "Rustic · charcoal + brick + bone",
+    sector: "restaurants_tavernas",
+    aestheticSlug: "organic-natural",
+    paletteSlug: "ink-orange-bone",
+    typographySlug: "vintage-classical",
+  },
+
+  // Cafes / Bars / Pubs — three variants
+  {
+    slug: "cafes-specialty",
+    label: "Specialty coffee · bone + espresso + sage",
+    sector: "cafes_bars_pubs",
+    variant: "Specialty coffee",
+    aestheticSlug: "refined-minimal",
+    paletteSlug: "bone-espresso-sage",
+    typographySlug: "geometric-modern",
+  },
+  {
+    slug: "cafes-cocktail",
+    label: "Cocktail bar · black + amber + oxblood",
+    sector: "cafes_bars_pubs",
+    variant: "Cocktail bar",
+    aestheticSlug: "luxury-dark-refined",
+    paletteSlug: "black-amber-oxblood",
+    typographySlug: "editorial-serif",
+  },
+  {
+    slug: "cafes-beach",
+    label: "Beach bar · turquoise + coral + sand",
+    sector: "cafes_bars_pubs",
+    variant: "Beach bar",
+    aestheticSlug: "playful-toy",
+    paletteSlug: "turquoise-coral-sand",
+    typographySlug: "humanist-friendly",
+  },
+
+  // Bakeries
+  {
+    slug: "bakeries-artisan",
+    label: "Artisan · cream + flour + rust",
+    sector: "bakeries",
+    aestheticSlug: "organic-natural",
+    paletteSlug: "warm-cream-flour-rust",
+    typographySlug: "editorial-serif",
+  },
+
+  // Accommodations — three variants
+  {
+    slug: "accommodations-cycladic",
+    label: "Cycladic · Aegean blue + bone",
+    sector: "accommodations",
+    variant: "Cycladic",
+    aestheticSlug: "greek-island-whitewash",
+    paletteSlug: "aegean-bone",
+    typographySlug: "editorial-serif",
+  },
+  {
+    slug: "accommodations-mountain",
+    label: "Mountain · forest + sand + brick",
+    sector: "accommodations",
+    variant: "Mountain",
+    aestheticSlug: "scandinavian-hygge",
+    paletteSlug: "forest-sand-brick",
+    typographySlug: "humanist-friendly",
+  },
+  {
+    slug: "accommodations-luxury",
+    label: "Luxury villa · navy + brass + ivory",
+    sector: "accommodations",
+    variant: "Luxury villa",
+    aestheticSlug: "luxury-dark-refined",
+    paletteSlug: "navy-brass-ivory",
+    typographySlug: "editorial-serif",
+  },
+
+  // Boutique
+  {
+    slug: "boutique-fashion-editorial",
+    label: "Fashion editorial · high-contrast B&W",
+    sector: "boutique",
+    aestheticSlug: "french-boutique",
+    paletteSlug: "high-contrast-bw",
+    typographySlug: "display-contrast-mono",
+  },
+
+  // Car rentals
+  {
+    slug: "car-rental-utilitarian",
+    label: "Utilitarian · charcoal + mustard + bone",
+    sector: "car_rental",
+    aestheticSlug: "industrial-utilitarian",
+    paletteSlug: "high-contrast-bw",
+    typographySlug: "geometric-modern",
+  },
+
+  // Boat rentals
+  {
+    slug: "boat-rental-nautical",
+    label: "Nautical luxe · navy + brass + ivory",
+    sector: "boat_rental",
+    aestheticSlug: "luxury-dark-refined",
+    paletteSlug: "navy-brass-ivory",
+    typographySlug: "editorial-serif",
+  },
+
+  // Beauty / wellness — two variants
+  {
+    slug: "beauty-spa-serene",
+    label: "Spa serene · olive + sand + ink",
+    sector: "beauty_wellness",
+    variant: "Spa",
+    aestheticSlug: "japanese-minimal",
+    paletteSlug: "olive-sand-ink",
+    typographySlug: "editorial-serif",
+  },
+  {
+    slug: "beauty-nails",
+    label: "Nails / beauty · blush + burgundy + cream",
+    sector: "beauty_wellness",
+    variant: "Nails / beauty",
+    aestheticSlug: "soft-pastel",
+    paletteSlug: "blush-burgundy-cream",
+    typographySlug: "editorial-serif",
+  },
+
+  // Local services
+  {
+    slug: "local-services-trust-first",
+    label: "Trust-first · navy + sun + paper",
+    sector: "local_services",
+    aestheticSlug: "refined-minimal",
+    paletteSlug: "navy-sun-paper",
+    typographySlug: "humanist-friendly",
+  },
+
+  // Phase 2 sectors
+
+  // Barbers — two variants
+  {
+    slug: "barbers-vintage",
+    label: "Vintage · brown + cream + barber-red",
+    sector: "barbers",
+    variant: "Vintage",
+    aestheticSlug: "vintage-travel-poster",
+    paletteSlug: "vintage-brown-cream-red",
+    typographySlug: "vintage-classical",
+  },
+  {
+    slug: "barbers-modern",
+    label: "Modern industrial · ink + orange + bone",
+    sector: "barbers",
+    variant: "Modern",
+    aestheticSlug: "industrial-utilitarian",
+    paletteSlug: "ink-orange-bone",
+    typographySlug: "vintage-classical",
+  },
+
+  // Tour operators
+  {
+    slug: "tour-operators-adventure",
+    label: "Adventure editorial · Aegean + bone",
+    sector: "tour_operators",
+    aestheticSlug: "editorial-magazine",
+    paletteSlug: "aegean-bone",
+    typographySlug: "editorial-serif",
+  },
+
+  // Wineries
+  {
+    slug: "wineries-terroir",
+    label: "Terroir · emerald + gold",
+    sector: "wineries",
+    aestheticSlug: "luxury-dark-refined",
+    paletteSlug: "emerald-gold",
+    typographySlug: "editorial-serif",
+  },
+
+  // Ice cream / Gelato
+  {
+    slug: "ice-cream-playful",
+    label: "Playful pastel · soft pastels",
+    sector: "ice_cream",
+    aestheticSlug: "playful-toy",
+    paletteSlug: "soft-pastels",
+    typographySlug: "humanist-friendly",
+  },
+
+  // Yoga / Pilates / Gyms
+  {
+    slug: "yoga-serene",
+    label: "Serene minimal · olive + sand + ink",
+    sector: "yoga_pilates",
+    aestheticSlug: "japanese-minimal",
+    paletteSlug: "olive-sand-ink",
+    typographySlug: "editorial-serif",
+  },
+
+  // Photographers
+  {
+    slug: "photographers-portfolio",
+    label: "Portfolio-first · high-contrast B&W",
+    sector: "photographers",
+    aestheticSlug: "editorial-magazine",
+    paletteSlug: "high-contrast-bw",
+    typographySlug: "display-contrast-mono",
+  },
+
+  // Jewelers
+  {
+    slug: "jewelers-handcrafted",
+    label: "Handcrafted · emerald + gold",
+    sector: "jewelers",
+    aestheticSlug: "luxury-dark-refined",
+    paletteSlug: "emerald-gold",
+    typographySlug: "editorial-serif",
+  },
+
+  // Galleries
+  {
+    slug: "galleries-contemporary",
+    label: "Contemporary · high-contrast B&W",
+    sector: "galleries",
+    aestheticSlug: "brutalist-elegant",
+    paletteSlug: "high-contrast-bw",
+    typographySlug: "geometric-modern",
+  },
+
+  // Bookstores
+  {
+    slug: "bookstores-curated",
+    label: "Curated · forest + sand + brick",
+    sector: "bookstores",
+    aestheticSlug: "editorial-magazine",
+    paletteSlug: "forest-sand-brick",
+    typographySlug: "editorial-serif",
+  },
+
+  // Medical / Dental — one trust-first preset
+  {
+    slug: "medical-trust-first",
+    label: "Trust-first · navy + sun + paper",
+    sector: "medical_dental",
+    aestheticSlug: "refined-minimal",
+    paletteSlug: "navy-sun-paper",
+    typographySlug: "humanist-friendly",
+  },
+
+  // Real estate
+  {
+    slug: "real-estate-editorial",
+    label: "Editorial · navy + sun + paper",
+    sector: "real_estate",
+    aestheticSlug: "editorial-magazine",
+    paletteSlug: "navy-sun-paper",
+    typographySlug: "editorial-serif",
+  },
+
+  // Schools (driving / music / tutoring)
+  {
+    slug: "schools-friendly",
+    label: "Friendly · cream + flour + rust",
+    sector: "schools",
+    aestheticSlug: "mid-century-modern",
+    paletteSlug: "warm-cream-flour-rust",
+    typographySlug: "humanist-friendly",
   },
 ];
 

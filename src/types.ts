@@ -7,7 +7,20 @@ export type Sector =
   | "car_rental"
   | "boat_rental"
   | "beauty_wellness"
-  | "local_services";
+  | "local_services"
+  // Phase 2 additions (2026-04-28).
+  | "barbers"
+  | "tour_operators"
+  | "wineries"
+  | "ice_cream"
+  | "yoga_pilates"
+  | "photographers"
+  | "bookstores"
+  | "jewelers"
+  | "galleries"
+  | "medical_dental"
+  | "real_estate"
+  | "schools";
 
 export interface SectorOption {
   value: Sector;
@@ -26,6 +39,19 @@ export const SECTORS: SectorOption[] = [
   { value: "boat_rental", label: "Boat rentals", googleType: "point_of_interest", keyword: "boat rental" },
   { value: "beauty_wellness", label: "Beauty / wellness", googleType: "beauty_salon" },
   { value: "local_services", label: "Local services", googleType: "point_of_interest", keyword: "local service" },
+  // Phase 2 sector additions (2026-04-28).
+  { value: "barbers", label: "Barbers", googleType: "barber_shop" },
+  { value: "tour_operators", label: "Tour operators / Excursions", googleType: "tour_agency" },
+  { value: "wineries", label: "Wineries / Distilleries / Breweries", googleType: "winery" },
+  { value: "ice_cream", label: "Ice cream / Gelato", googleType: "ice_cream_shop" },
+  { value: "yoga_pilates", label: "Yoga / Pilates / Gyms", googleType: "gym" },
+  { value: "photographers", label: "Photographers", googleType: "photographer" },
+  { value: "bookstores", label: "Bookstores", googleType: "book_store" },
+  { value: "jewelers", label: "Jewelers / Goldsmiths", googleType: "jewelry_store" },
+  { value: "galleries", label: "Galleries / Artist studios", googleType: "art_gallery" },
+  { value: "medical_dental", label: "Medical / Dental clinics", googleType: "doctor" },
+  { value: "real_estate", label: "Real estate agents", googleType: "real_estate_agency" },
+  { value: "schools", label: "Schools (driving / music / tutoring)", googleType: "school" },
 ];
 
 export interface SearchFilters {

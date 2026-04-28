@@ -187,6 +187,145 @@ const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
     queries: ["local services", "workshops", "repair shops", "small shops", "artisans", "pottery"],
     includedTypes: ["store"],
   },
+  // Phase 2 sector additions (2026-04-28). Queries are English-only,
+  // following the established pattern — Google Places matches them
+  // against multilingual business names just fine. includedTypes
+  // whitelist filters out off-target results during the post-process.
+  barbers: {
+    queries: [
+      "barber shops",
+      "barbers",
+      "men's haircuts",
+      "traditional barbers",
+      "barber",
+    ],
+    includedTypes: ["barber_shop", "hair_care"],
+  },
+  tour_operators: {
+    queries: [
+      "tour operators",
+      "boat tours",
+      "guided tours",
+      "day trips",
+      "excursions",
+      "hiking tours",
+      "wine tours",
+      "diving tours",
+      "sailing trips",
+      "sunset cruises",
+    ],
+    includedTypes: ["tour_agency", "tourist_attraction", "travel_agency"],
+  },
+  wineries: {
+    queries: [
+      "wineries",
+      "vineyards",
+      "wine tasting",
+      "wine cellars",
+      "distilleries",
+      "breweries",
+      "tsipouro distilleries",
+    ],
+    includedTypes: ["winery", "tourist_attraction"],
+  },
+  ice_cream: {
+    queries: [
+      "ice cream",
+      "gelato",
+      "ice cream parlor",
+      "παγωτό",
+      "frozen yogurt",
+      "artisan ice cream",
+    ],
+    includedTypes: ["ice_cream_shop"],
+  },
+  yoga_pilates: {
+    queries: [
+      "yoga studios",
+      "pilates studios",
+      "gyms",
+      "fitness centers",
+      "yoga classes",
+      "pilates",
+      "crossfit",
+    ],
+    includedTypes: ["gym", "yoga_studio", "fitness_center"],
+  },
+  photographers: {
+    queries: [
+      "photographers",
+      "wedding photographers",
+      "portrait photographers",
+      "photography studios",
+      "event photographers",
+    ],
+    includedTypes: ["photographer"],
+  },
+  bookstores: {
+    queries: [
+      "bookstores",
+      "book shops",
+      "βιβλιοπωλεία",
+      "secondhand books",
+      "used bookstores",
+    ],
+    includedTypes: ["book_store"],
+  },
+  jewelers: {
+    queries: [
+      "jewelers",
+      "jewelry shops",
+      "goldsmiths",
+      "handmade jewelry",
+      "κοσμηματοπωλεία",
+      "silversmith",
+    ],
+    includedTypes: ["jewelry_store"],
+  },
+  galleries: {
+    queries: [
+      "art galleries",
+      "artist studios",
+      "γκαλερί τέχνης",
+      "contemporary art galleries",
+      "fine art galleries",
+    ],
+    includedTypes: ["art_gallery"],
+  },
+  medical_dental: {
+    queries: [
+      "dentists",
+      "doctors",
+      "dental clinics",
+      "medical clinics",
+      "οδοντίατροι",
+      "ιατρεία",
+      "physiotherapists",
+    ],
+    includedTypes: ["dentist", "doctor", "medical_clinic", "hospital", "physiotherapist"],
+  },
+  real_estate: {
+    queries: [
+      "real estate agents",
+      "real estate offices",
+      "μεσιτικά γραφεία",
+      "property agents",
+    ],
+    includedTypes: ["real_estate_agency"],
+  },
+  schools: {
+    queries: [
+      "driving schools",
+      "music schools",
+      "tutoring centers",
+      "language schools",
+      "σχολές οδηγών",
+      "ωδεία",
+      "φροντιστήρια",
+      "dance schools",
+    ],
+    includedTypes: ["school"],
+  },
 };
 
 function jsonRes(statusCode: number, body: unknown) {

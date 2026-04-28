@@ -154,6 +154,20 @@ export const DEMO_DATA: Record<Sector, DemoBusiness[]> = {
     reviews: [{ author: "Maria", rating: 5, text: "Best hair salon on Paros — Eirini really listens.", relative_time: "1 week ago" }],
     photo_refs: [],
   }],
+  // Phase 2 sectors — empty so demo mode doesn't break for them.
+  // Real Places search produces real businesses for these in production.
+  barbers: [],
+  tour_operators: [],
+  wineries: [],
+  ice_cream: [],
+  yoga_pilates: [],
+  photographers: [],
+  bookstores: [],
+  jewelers: [],
+  galleries: [],
+  medical_dental: [],
+  real_estate: [],
+  schools: [],
   local_services: [{
     place_id: "demo_local_1", name: "Cyclades Property Care",
     address: "Paros, Greece", formatted_address: "Paros, Greece",

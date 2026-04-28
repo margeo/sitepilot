@@ -7,7 +7,20 @@ export type Sector =
   | "car_rental"
   | "boat_rental"
   | "beauty_wellness"
-  | "local_services";
+  | "local_services"
+  // Phase 2 additions (2026-04-28).
+  | "barbers"
+  | "tour_operators"
+  | "wineries"
+  | "ice_cream"
+  | "yoga_pilates"
+  | "photographers"
+  | "bookstores"
+  | "jewelers"
+  | "galleries"
+  | "medical_dental"
+  | "real_estate"
+  | "schools";
 
 export interface SectorTheme {
   label: string;
@@ -150,6 +163,118 @@ export const SECTOR_THEMES: Record<Sector, SectorTheme> = {
     keywords: ["local service", "professional"],
     suggestedPages: ["Home", "Services", "Gallery", "Contact"],
     hasMenu: false, hasRooms: false, hasGallery: true,
+  },
+  // Phase 2 additions — only used by the legacy template.ts pipeline,
+  // which is no longer in the active path. Minimal placeholders just
+  // satisfy the Record<Sector, SectorTheme> type. The lean prompt + per-
+  // sector PRESETS in src/design-presets.ts drive the actual look now.
+  barbers: {
+    label: "Barbers", primary: "#1a1a1a", primaryDark: "#000000", accent: "#c41e3a",
+    bgTint: "#fafaf7", heroOverlay: "rgba(10,10,10,0.55)",
+    servicesLabel: "Services", servicesSingular: "service",
+    tagline: "Cuts, shaves, beard care.", aboutHeading: "The shop",
+    ctaReserve: "Book a chair", keywords: ["barber", "haircut", "shave", "men's grooming"],
+    suggestedPages: ["Home", "Services", "Gallery", "Book"],
+    hasMenu: false, hasRooms: false, hasGallery: true,
+  },
+  tour_operators: {
+    label: "Tour Operators", primary: "#0c4b73", primaryDark: "#062f49", accent: "#f2b83a",
+    bgTint: "#eaf4fa", heroOverlay: "rgba(5,30,55,0.55)",
+    servicesLabel: "Tours", servicesSingular: "tour",
+    tagline: "Guided experiences, locally led.", aboutHeading: "About",
+    ctaReserve: "Book a tour", keywords: ["tour", "excursion", "guided", "day trip"],
+    suggestedPages: ["Home", "Tours", "Gallery", "Book"],
+    hasMenu: false, hasRooms: false, hasGallery: true,
+  },
+  wineries: {
+    label: "Wineries", primary: "#3d1f3d", primaryDark: "#1f0f1f", accent: "#c9a96e",
+    bgTint: "#f4ecdc", heroOverlay: "rgba(40,20,40,0.55)",
+    servicesLabel: "Wines", servicesSingular: "wine",
+    tagline: "Grown, fermented, bottled here.", aboutHeading: "Terroir",
+    ctaReserve: "Book a tasting", keywords: ["winery", "vineyard", "wine tasting", "cellar"],
+    suggestedPages: ["Home", "Wines", "Tastings", "Visit"],
+    hasMenu: false, hasRooms: false, hasGallery: true,
+  },
+  ice_cream: {
+    label: "Ice Cream / Gelato", primary: "#ffb5c5", primaryDark: "#c4848e", accent: "#3d2817",
+    bgTint: "#fff5d6", heroOverlay: "rgba(255,181,197,0.30)",
+    servicesLabel: "Flavors", servicesSingular: "flavor",
+    tagline: "Made fresh, scooped daily.", aboutHeading: "About",
+    ctaReserve: "Find us", keywords: ["ice cream", "gelato", "παγωτό"],
+    suggestedPages: ["Home", "Flavors", "Find us"],
+    hasMenu: true, hasRooms: false, hasGallery: true,
+  },
+  yoga_pilates: {
+    label: "Yoga / Pilates / Gyms", primary: "#5a6b3d", primaryDark: "#36431f", accent: "#c44536",
+    bgTint: "#f4ecdc", heroOverlay: "rgba(50,60,40,0.45)",
+    servicesLabel: "Classes", servicesSingular: "class",
+    tagline: "Move, breathe, recover.", aboutHeading: "The studio",
+    ctaReserve: "Book a class", keywords: ["yoga", "pilates", "fitness"],
+    suggestedPages: ["Home", "Schedule", "Teachers", "Book"],
+    hasMenu: false, hasRooms: false, hasGallery: true,
+  },
+  photographers: {
+    label: "Photographers", primary: "#0a0a0a", primaryDark: "#000000", accent: "#a8a29e",
+    bgTint: "#fafaf7", heroOverlay: "rgba(0,0,0,0.40)",
+    servicesLabel: "Portfolio", servicesSingular: "shoot",
+    tagline: "Image-led storytelling.", aboutHeading: "About",
+    ctaReserve: "Contact for a quote", keywords: ["photographer", "wedding photography", "portrait"],
+    suggestedPages: ["Home", "Portfolio", "About", "Contact"],
+    hasMenu: false, hasRooms: false, hasGallery: true,
+  },
+  bookstores: {
+    label: "Bookstores", primary: "#2d3a2e", primaryDark: "#15201a", accent: "#c44536",
+    bgTint: "#f4ecdc", heroOverlay: "rgba(20,30,25,0.50)",
+    servicesLabel: "Picks", servicesSingular: "title",
+    tagline: "Curated reading, locally chosen.", aboutHeading: "About",
+    ctaReserve: "Visit us", keywords: ["bookstore", "books", "βιβλιοπωλείο"],
+    suggestedPages: ["Home", "Picks", "Events", "Visit"],
+    hasMenu: false, hasRooms: false, hasGallery: true,
+  },
+  jewelers: {
+    label: "Jewelers", primary: "#1a1a1a", primaryDark: "#000000", accent: "#c9a96e",
+    bgTint: "#fafaf7", heroOverlay: "rgba(0,0,0,0.45)",
+    servicesLabel: "Collection", servicesSingular: "piece",
+    tagline: "Handmade jewellery, made here.", aboutHeading: "The maker",
+    ctaReserve: "Visit the studio", keywords: ["jeweler", "goldsmith", "handmade jewelry"],
+    suggestedPages: ["Home", "Collection", "About", "Visit"],
+    hasMenu: false, hasRooms: false, hasGallery: true,
+  },
+  galleries: {
+    label: "Galleries / Studios", primary: "#fafaf7", primaryDark: "#dddddd", accent: "#1a1a1a",
+    bgTint: "#fafaf7", heroOverlay: "rgba(0,0,0,0.30)",
+    servicesLabel: "Works", servicesSingular: "work",
+    tagline: "Contemporary work, exhibited locally.", aboutHeading: "About",
+    ctaReserve: "Visit", keywords: ["gallery", "art gallery", "studio"],
+    suggestedPages: ["Home", "Works", "Visit"],
+    hasMenu: false, hasRooms: false, hasGallery: true,
+  },
+  medical_dental: {
+    label: "Medical / Dental", primary: "#1a3a5c", primaryDark: "#0a2440", accent: "#5b8aaf",
+    bgTint: "#f0f4f8", heroOverlay: "rgba(20,40,70,0.45)",
+    servicesLabel: "Services", servicesSingular: "treatment",
+    tagline: "Trusted local care.", aboutHeading: "About",
+    ctaReserve: "Book an appointment", keywords: ["dentist", "doctor", "clinic", "medical"],
+    suggestedPages: ["Home", "Services", "Team", "Contact"],
+    hasMenu: false, hasRooms: false, hasGallery: false,
+  },
+  real_estate: {
+    label: "Real Estate", primary: "#0d2438", primaryDark: "#06121d", accent: "#d99752",
+    bgTint: "#f4ecdc", heroOverlay: "rgba(15,25,40,0.55)",
+    servicesLabel: "Listings", servicesSingular: "listing",
+    tagline: "Local property expertise.", aboutHeading: "About",
+    ctaReserve: "Get in touch", keywords: ["real estate", "property", "agent"],
+    suggestedPages: ["Home", "Listings", "About", "Contact"],
+    hasMenu: false, hasRooms: false, hasGallery: true,
+  },
+  schools: {
+    label: "Schools (driving / music / tutoring)", primary: "#1a3a5c", primaryDark: "#0a2440", accent: "#f2b83a",
+    bgTint: "#f0f4f8", heroOverlay: "rgba(20,40,70,0.45)",
+    servicesLabel: "Programs", servicesSingular: "program",
+    tagline: "Learn locally, with experienced teachers.", aboutHeading: "About",
+    ctaReserve: "Enroll", keywords: ["school", "tutoring", "music school", "driving school"],
+    suggestedPages: ["Home", "Programs", "Teachers", "Enroll"],
+    hasMenu: false, hasRooms: false, hasGallery: false,
   },
 };
 

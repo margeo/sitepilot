@@ -7,7 +7,13 @@ import {
   type SearchFilters,
   type Sector,
 } from "../types";
-import { AESTHETICS, PALETTES, TYPOGRAPHY, pickRandom } from "../design-presets";
+import {
+  AESTHETICS,
+  PALETTES,
+  SECTOR_PRESETS,
+  TYPOGRAPHY,
+  pickRandom,
+} from "../design-presets";
 import { autocompleteLocation, type LocationSuggestion } from "../lib/api";
 
 interface Props {
@@ -423,6 +429,46 @@ export function SearchForm({
               🎲 Roll all
             </button>
           </div>
+
+          {(() => {
+            const presetsForSector = SECTOR_PRESETS.filter((p) => p.sector === sector);
+            if (presetsForSector.length === 0) return null;
+            return (
+              <>
+                <label htmlFor="sectorPreset">Sector preset</label>
+                <select
+                  id="sectorPreset"
+                  value=""
+                  onChange={(e) => {
+                    const preset = SECTOR_PRESETS.find((p) => p.slug === e.target.value);
+                    if (!preset) return;
+                    onAestheticChange(preset.aestheticSlug);
+                    onPaletteChange(preset.paletteSlug);
+                    onTypographyChange(preset.typographySlug);
+                  }}
+                  style={{ width: "100%", marginBottom: 4 }}
+                  title="Apply a curated bundle of aesthetic + palette + typography for this sector. Each pick fills the three dropdowns below."
+                >
+                  <option value="">— Apply a sector preset —</option>
+                  {presetsForSector.map((p) => (
+                    <option key={p.slug} value={p.slug}>
+                      {p.label}
+                    </option>
+                  ))}
+                </select>
+                <div
+                  style={{
+                    color: "var(--text-muted)",
+                    fontSize: 11,
+                    marginTop: 4,
+                    marginBottom: 10,
+                  }}
+                >
+                  Auto-fills the three dropdowns below. You can still override individual slots.
+                </div>
+              </>
+            );
+          })()}
 
           <label htmlFor="aestheticSlug">Aesthetic direction</label>
           <select
