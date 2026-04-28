@@ -13,6 +13,8 @@ const PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
 interface Place {
   place_id: string;
   name: string;
+  rating?: number;
+  reviewCount: number;
 }
 
 async function placesPaginated(
@@ -30,7 +32,8 @@ async function placesPaginated(
       headers: {
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
-        "X-Goog-FieldMask": "places.id,places.displayName,nextPageToken",
+        "X-Goog-FieldMask":
+          "places.id,places.displayName,places.rating,places.userRatingCount,nextPageToken",
       },
       body: JSON.stringify(body),
     });
@@ -40,11 +43,21 @@ async function placesPaginated(
       return all;
     }
     const data = (await res.json()) as {
-      places?: Array<{ id: string; displayName?: { text?: string } }>;
+      places?: Array<{
+        id: string;
+        displayName?: { text?: string };
+        rating?: number;
+        userRatingCount?: number;
+      }>;
       nextPageToken?: string;
     };
     for (const p of data.places ?? []) {
-      all.push({ place_id: p.id, name: p.displayName?.text ?? "" });
+      all.push({
+        place_id: p.id,
+        name: p.displayName?.text ?? "",
+        rating: p.rating,
+        reviewCount: p.userRatingCount ?? 0,
+      });
     }
     pageToken = data.nextPageToken;
     if (!pageToken) break;
@@ -68,36 +81,35 @@ export const handler: Handler = async (event) => {
   const location = event.queryStringParameters?.location?.trim();
   if (!location) return jsonRes(400, { error: "Pass ?location=..." });
 
-  const queries = [
-    `SeaMe House Symi`,
-    `SeaMe House in ${location}`,
-  ];
+  const query = `lodging in ${location}`;
 
   const t0 = Date.now();
-  const batches = await Promise.all(queries.map((q) => placesPaginated(apiKey, q, 3)));
+  const batch = await placesPaginated(apiKey, query, 3);
   const elapsedMs = Date.now() - t0;
 
-  const seen = new Set<string>();
-  const perQuery = queries.map((q, i) => {
-    const batch = batches[i];
-    const newOnes = batch.filter((b) => !seen.has(b.place_id));
-    for (const b of newOnes) seen.add(b.place_id);
-    return {
-      query: q,
-      paginatedCalls: Math.max(1, Math.ceil(batch.length / 20)),
-      returned: batch.length,
-      uniqueAdded: newOnes.length,
-      newNames: newOnes.map((b) => b.name),
-      allNames: batch.map((b) => b.name),
-    };
-  });
+  // Group by review-count buckets so we can see the distribution.
+  const byBucket: Record<string, Array<{ name: string; rating?: number; reviewCount: number }>> = {
+    "0 reviews": [],
+    "1 review": [],
+    "2-9 reviews": [],
+    "10+ reviews": [],
+  };
+  for (const p of batch) {
+    const meta = { name: p.name, rating: p.rating, reviewCount: p.reviewCount };
+    if (p.reviewCount === 0) byBucket["0 reviews"].push(meta);
+    else if (p.reviewCount === 1) byBucket["1 review"].push(meta);
+    else if (p.reviewCount < 10) byBucket["2-9 reviews"].push(meta);
+    else byBucket["10+ reviews"].push(meta);
+  }
 
   return jsonRes(200, {
+    query,
     location,
-    queries: queries.length,
-    totalUnique: seen.size,
-    totalReturned: batches.reduce((s, b) => s + b.length, 0),
+    totalReturned: batch.length,
+    paginatedCalls: Math.max(1, Math.ceil(batch.length / 20)),
     elapsedMs,
-    perQuery,
+    byBucket: Object.fromEntries(
+      Object.entries(byBucket).map(([k, v]) => [k, { count: v.length, places: v }]),
+    ),
   });
 };
