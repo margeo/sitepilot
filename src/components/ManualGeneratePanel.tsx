@@ -16,6 +16,7 @@ interface Props {
 export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Props) {
   const [prompt, setPrompt] = useState<string | null>(null);
   const [pastedText, setPastedText] = useState("");
+  const [chatUrl, setChatUrl] = useState("");
   const [loadingPrompt, setLoadingPrompt] = useState(true);
   const [promptError, setPromptError] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
@@ -83,16 +84,25 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
       setNote(`That doesn't look like a complete HTML document (got ${html.length} chars, no </html>). Make sure you copied the full response.`);
       return;
     }
+    const trimmedUrl = chatUrl.trim();
     const site: GeneratedSite = {
       html,
       seo_keywords: [],
       generated_by: "manual",
       provider: "manual",
       model: "claude.ai (web)",
+      ...(trimmedUrl && /^https?:\/\//i.test(trimmedUrl)
+        ? { claude_chat_url: trimmedUrl }
+        : {}),
     };
     onSave(site);
     setPastedText("");
-    setNote("Saved. The site preview should now appear under this row.");
+    setChatUrl("");
+    setNote(
+      trimmedUrl
+        ? "Saved with chat URL — you can reopen the Claude conversation from the site preview."
+        : "Saved. The site preview should now appear under this row.",
+    );
   }
 
   return (
@@ -241,6 +251,39 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
                 padding: "8px 10px",
                 minHeight: 100,
                 resize: "vertical",
+              }}
+            />
+          </div>
+
+          <div style={{ marginTop: 12 }}>
+            <label
+              htmlFor="claude-chat-url"
+              style={{
+                display: "block",
+                color: "var(--text-muted)",
+                marginBottom: 6,
+              }}
+            >
+              <strong style={{ color: "var(--text)" }}>Optional ·</strong> Claude
+              chat URL — lets you reopen the conversation later to see Claude's
+              reasoning or ask for tweaks.
+            </label>
+            <input
+              id="claude-chat-url"
+              type="url"
+              value={chatUrl}
+              onChange={(e) => setChatUrl(e.target.value)}
+              placeholder="https://claude.ai/chat/…"
+              spellCheck={false}
+              style={{
+                width: "100%",
+                fontFamily: "ui-monospace, Menlo, Consolas, monospace",
+                fontSize: 11.5,
+                background: "var(--bg-card)",
+                color: "var(--text)",
+                border: "1px solid var(--border)",
+                borderRadius: "var(--radius-sm)",
+                padding: "8px 10px",
               }}
             />
           </div>

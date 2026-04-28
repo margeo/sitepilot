@@ -84,6 +84,10 @@ export interface GeneratedSite {
   generated_by: string;
   provider?: string;
   model?: string;
+  // Optional pointer back to the claude.ai chat that produced this site (manual
+  // path only). Lets the operator reopen the original conversation to see
+  // Claude's full reasoning, ask follow-up tweaks, or share the chat URL.
+  claude_chat_url?: string;
 }
 
 // Design-model dropdown values. Backend validates against an allow-list
