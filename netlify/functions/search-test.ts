@@ -1,10 +1,10 @@
-// TEMPORARY test endpoint. Two paginated queries side-by-side:
-//   1) "hotels in <location>"        × 3 pages
-//   2) "vacation rentals in <location>" × 3 pages
-// Reports per-query uniqueAdded + names so we can see whether different
-// query keywords pull genuinely different places out of Google's index.
+// TEMPORARY test endpoint. Fires the proposed 16-query structure
+// (Tier A umbrella + Tier B distinct + Tier C niche), each paginated to 3
+// pages, then filters to no-website places only. Reports per-query
+// uniqueAdded so we can see whether the proposed prune holds up on a new
+// location like Paros.
 //
-// Usage: GET /.netlify/functions/search-test?location=Symi%2C%20Greece
+// Usage: GET /.netlify/functions/search-test?location=Paros%2C%20Greece
 
 import type { Handler } from "@netlify/functions";
 
@@ -15,7 +15,28 @@ interface Place {
   name: string;
   rating?: number;
   reviewCount: number;
+  hasWebsite: boolean;
 }
+
+const TIER_A = ["lodging", "hotels"];
+const TIER_B = [
+  "boutique hotels",
+  "villas",
+  "condos",
+  "bungalows",
+  "guesthouses",
+  "apartments for rent",
+  "studios",
+  "bed and breakfasts",
+];
+const TIER_C = [
+  "traditional stone houses",
+  "seaside apartments",
+  "houseboats",
+  "cabins",
+  "hostels",
+  "inns",
+];
 
 async function placesPaginated(
   apiKey: string,
@@ -33,7 +54,7 @@ async function placesPaginated(
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
         "X-Goog-FieldMask":
-          "places.id,places.displayName,places.rating,places.userRatingCount,nextPageToken",
+          "places.id,places.displayName,places.rating,places.userRatingCount,places.websiteUri,nextPageToken",
       },
       body: JSON.stringify(body),
     });
@@ -48,6 +69,7 @@ async function placesPaginated(
         displayName?: { text?: string };
         rating?: number;
         userRatingCount?: number;
+        websiteUri?: string;
       }>;
       nextPageToken?: string;
     };
@@ -57,6 +79,7 @@ async function placesPaginated(
         name: p.displayName?.text ?? "",
         rating: p.rating,
         reviewCount: p.userRatingCount ?? 0,
+        hasWebsite: Boolean(p.websiteUri),
       });
     }
     pageToken = data.nextPageToken;
@@ -81,35 +104,44 @@ export const handler: Handler = async (event) => {
   const location = event.queryStringParameters?.location?.trim();
   if (!location) return jsonRes(400, { error: "Pass ?location=..." });
 
-  const query = `lodging in ${location}`;
+  const queries = [
+    ...TIER_A.map((q) => ({ tier: "A", query: `${q} in ${location}` })),
+    ...TIER_B.map((q) => ({ tier: "B", query: `${q} in ${location}` })),
+    ...TIER_C.map((q) => ({ tier: "C", query: `${q} in ${location}` })),
+  ];
 
   const t0 = Date.now();
-  const batch = await placesPaginated(apiKey, query, 3);
+  const batches = await Promise.all(queries.map((q) => placesPaginated(apiKey, q.query, 3)));
   const elapsedMs = Date.now() - t0;
 
-  // Group by review-count buckets so we can see the distribution.
-  const byBucket: Record<string, Array<{ name: string; rating?: number; reviewCount: number }>> = {
-    "0 reviews": [],
-    "1 review": [],
-    "2-9 reviews": [],
-    "10+ reviews": [],
-  };
-  for (const p of batch) {
-    const meta = { name: p.name, rating: p.rating, reviewCount: p.reviewCount };
-    if (p.reviewCount === 0) byBucket["0 reviews"].push(meta);
-    else if (p.reviewCount === 1) byBucket["1 review"].push(meta);
-    else if (p.reviewCount < 10) byBucket["2-9 reviews"].push(meta);
-    else byBucket["10+ reviews"].push(meta);
-  }
+  // Pre-filter: drop places that already have a website
+  const noWebsiteBatches = batches.map((b) => b.filter((p) => !p.hasWebsite));
+
+  const seen = new Set<string>();
+  const perQuery = queries.map((q, i) => {
+    const fullBatch = batches[i];
+    const filtered = noWebsiteBatches[i];
+    const newOnes = filtered.filter((b) => !seen.has(b.place_id));
+    for (const b of newOnes) seen.add(b.place_id);
+    return {
+      tier: q.tier,
+      query: q.query,
+      paginatedCalls: Math.max(1, Math.ceil(fullBatch.length / 20)),
+      returned: fullBatch.length,
+      noWebsite: filtered.length,
+      uniqueAdded: newOnes.length,
+      newNames: newOnes.map((b) => b.name),
+    };
+  });
+
+  const totalCalls = batches.reduce((s, b) => s + Math.max(1, Math.ceil(b.length / 20)), 0);
 
   return jsonRes(200, {
-    query,
     location,
-    totalReturned: batch.length,
-    paginatedCalls: Math.max(1, Math.ceil(batch.length / 20)),
+    queriesFired: queries.length,
+    totalCalls,
+    totalUnique: seen.size,
     elapsedMs,
-    byBucket: Object.fromEntries(
-      Object.entries(byBucket).map(([k, v]) => [k, { count: v.length, places: v }]),
-    ),
+    perQuery,
   });
 };
