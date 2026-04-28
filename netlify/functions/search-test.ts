@@ -18,24 +18,17 @@ interface Place {
   hasWebsite: boolean;
 }
 
-const TIER_A = ["lodging", "hotels"];
+// Gemini's 5 suggested keywords we don't already have. Test if they
+// surface no-website places that our existing 22-query structure misses.
+const TIER_A: string[] = [];
 const TIER_B = [
-  "boutique hotels",
-  "condos",
-  "bungalows",
-  "guesthouses",
-  "apartments for rent",
-  "studios",
-  "bed and breakfasts",
+  "glamping",
+  "guest house",
+  "cabin rental",
+  "vacation rental",
+  "cottage",
 ];
-const TIER_C = [
-  "traditional stone houses",
-  "seaside apartments",
-  "houseboats",
-  "cabins",
-  "hostels",
-  "inns",
-];
+const TIER_C: string[] = [];
 
 async function placesPaginated(
   apiKey: string,
