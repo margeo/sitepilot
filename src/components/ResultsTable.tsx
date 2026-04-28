@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { BusinessBasic } from "../types";
+import type { BusinessBasic, BusinessDetails, GeneratedSite } from "../types";
+import { SitePreview } from "./SitePreview";
 
 interface Props {
   results: BusinessBasic[];
@@ -12,6 +13,11 @@ interface Props {
   // unlocks the Generate site button visually (Generate site itself enforces
   // this server-checkable rule too).
   researchedIds?: ReadonlyMap<string, unknown>;
+  // Per-row generated-site cache. Each entry has the produced HTML +
+  // metadata (site) and the enriched business object that SitePreview
+  // needs (business). Both are persisted to localStorage by App.tsx.
+  siteByPlaceId?: ReadonlyMap<string, GeneratedSite>;
+  businessByPlaceId?: ReadonlyMap<string, BusinessDetails>;
 }
 
 // Loose shape of the dossier returned by /research-business. Mirrors the
@@ -242,14 +248,26 @@ export function ResultsTable({
   loadingId,
   researchingId,
   researchedIds,
+  siteByPlaceId,
+  businessByPlaceId,
 }: Props) {
   // Place_ids whose dossier panel the user has manually closed. The dossier
   // itself stays cached in researchedIds (so Generate site still works);
   // only the panel UI is hidden.
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
+  // Same pattern for the per-row generated-site preview panel.
+  const [collapsedSiteIds, setCollapsedSiteIds] = useState<Set<string>>(() => new Set());
 
   function closePanel(placeId: string) {
     setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      next.add(placeId);
+      return next;
+    });
+  }
+
+  function closeSitePanel(placeId: string) {
+    setCollapsedSiteIds((prev) => {
       const next = new Set(prev);
       next.add(placeId);
       return next;
@@ -267,6 +285,18 @@ export function ResultsTable({
       return next;
     });
     onResearch(b);
+  }
+
+  function handleGenerateClick(b: BusinessBasic) {
+    // Same auto-reopen rule for the site panel — clicking Re-generate
+    // means the user wants to see the new output.
+    setCollapsedSiteIds((prev) => {
+      if (!prev.has(b.place_id)) return prev;
+      const next = new Set(prev);
+      next.delete(b.place_id);
+      return next;
+    });
+    onSelect(b);
   }
 
   if (results.length === 0) return null;
@@ -287,6 +317,10 @@ export function ResultsTable({
         const dossier = researchedIds?.get(b.place_id) as DossierShape | undefined;
         const isResearched = Boolean(dossier);
         const isPanelOpen = isResearched && !collapsedIds.has(b.place_id);
+        const cachedSite = siteByPlaceId?.get(b.place_id);
+        const cachedBusiness = businessByPlaceId?.get(b.place_id);
+        const isSiteCached = Boolean(cachedSite && cachedBusiness);
+        const isSitePanelOpen = isSiteCached && !collapsedSiteIds.has(b.place_id);
         const anyBusy = isGenerating || isResearching;
         return (
           <div key={b.place_id}>
@@ -348,7 +382,7 @@ export function ResultsTable({
                 <button
                   className="btn btn-sm"
                   disabled={anyBusy}
-                  onClick={() => onSelect(b)}
+                  onClick={() => handleGenerateClick(b)}
                   title={
                     !isResearched
                       ? "Click Research first — Generate site uses the cached dossier"
@@ -361,7 +395,7 @@ export function ResultsTable({
                       <span className="spinner" />
                       Building…
                     </>
-                  ) : isSelected ? (
+                  ) : isSiteCached ? (
                     "Re-generate"
                   ) : (
                     "Generate site"
@@ -371,6 +405,53 @@ export function ResultsTable({
             </div>
             {isPanelOpen && dossier && (
               <DossierPanel dossier={dossier} onClose={() => closePanel(b.place_id)} />
+            )}
+            {isSitePanelOpen && cachedSite && cachedBusiness && (
+              <div
+                style={{
+                  position: "relative",
+                  background: "var(--bg-elev)",
+                  borderBottom: "1px solid var(--border)",
+                  padding: "8px 16px 16px 16px",
+                }}
+              >
+                <button
+                  type="button"
+                  onClick={() => closeSitePanel(b.place_id)}
+                  aria-label="Close site preview"
+                  title="Close site preview"
+                  style={{
+                    position: "absolute",
+                    top: 10,
+                    right: 16,
+                    zIndex: 2,
+                    width: 26,
+                    height: 26,
+                    padding: 0,
+                    background: "transparent",
+                    border: "1px solid var(--border)",
+                    borderRadius: 6,
+                    color: "var(--text-muted)",
+                    cursor: "pointer",
+                    fontSize: 14,
+                    lineHeight: 1,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                  }}
+                  onMouseEnter={(e) => {
+                    e.currentTarget.style.background = "var(--bg-card)";
+                    e.currentTarget.style.color = "var(--text)";
+                  }}
+                  onMouseLeave={(e) => {
+                    e.currentTarget.style.background = "transparent";
+                    e.currentTarget.style.color = "var(--text-muted)";
+                  }}
+                >
+                  ✕
+                </button>
+                <SitePreview business={cachedBusiness} site={cachedSite} />
+              </div>
             )}
           </div>
         );

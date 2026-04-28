@@ -2,7 +2,6 @@ import { useEffect, useState } from "react";
 import "./App.css";
 import { SearchForm } from "./components/SearchForm";
 import { ResultsTable } from "./components/ResultsTable";
-import { SitePreview } from "./components/SitePreview";
 import { ScreenshotImport } from "./components/ScreenshotImport";
 import {
   fetchDetails,
@@ -76,16 +75,68 @@ export default function App() {
   const [researchingId, setResearchingId] = useState<string | undefined>();
   const [generationStatus, setGenerationStatus] = useState<JobStatus | null>(null);
   const [generationElapsed, setGenerationElapsed] = useState<number>(0);
-  const [selectedDetails, setSelectedDetails] = useState<BusinessDetails | null>(null);
-  const [selectedSite, setSelectedSite] = useState<GeneratedSite | null>(null);
   const [lastFilters, setLastFilters] = useState<SearchFilters | null>(null);
 
-  // Dossier cache: place_id -> dossier object. Filled by Research action.
-  // Site Generation reads from it and refuses to run if missing — keeps the
-  // research and design phases independent so each is one explicit click.
-  const [dossierByPlaceId, setDossierByPlaceId] = useState<Map<string, unknown>>(
-    () => new Map(),
+  // Per-row caches. All three are persisted to localStorage so research +
+  // generated sites survive a page refresh — the user pays once per row,
+  // they get to keep the result.
+  //
+  //   dossierByPlaceId:  research output, drives the dossier panel + unlocks
+  //                      the Generate site button for that row.
+  //   siteByPlaceId:     generated HTML + provider/model/SEO, drives the
+  //                      inline site preview panel under each row.
+  //   businessByPlaceId: enriched BusinessDetails (reviews, hours, photo
+  //                      refs, lead score) needed by the SitePreview.
+  const LS_DOSSIER_KEY = "sitepilot.cache.dossier.v1";
+  const LS_SITE_KEY = "sitepilot.cache.site.v1";
+  const LS_BUSINESS_KEY = "sitepilot.cache.business.v1";
+
+  function loadMap<V>(key: string): Map<string, V> {
+    try {
+      const raw = window.localStorage.getItem(key);
+      if (!raw) return new Map();
+      const parsed = JSON.parse(raw) as Array<[string, V]>;
+      return new Map(parsed);
+    } catch {
+      return new Map();
+    }
+  }
+
+  const [dossierByPlaceId, setDossierByPlaceId] = useState<Map<string, unknown>>(() =>
+    loadMap<unknown>(LS_DOSSIER_KEY),
   );
+  const [siteByPlaceId, setSiteByPlaceId] = useState<Map<string, GeneratedSite>>(() =>
+    loadMap<GeneratedSite>(LS_SITE_KEY),
+  );
+  const [businessByPlaceId, setBusinessByPlaceId] = useState<Map<string, BusinessDetails>>(
+    () => loadMap<BusinessDetails>(LS_BUSINESS_KEY),
+  );
+
+  // Mirror each cache to localStorage on every update.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        LS_DOSSIER_KEY,
+        JSON.stringify(Array.from(dossierByPlaceId.entries())),
+      );
+    } catch {}
+  }, [dossierByPlaceId]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        LS_SITE_KEY,
+        JSON.stringify(Array.from(siteByPlaceId.entries())),
+      );
+    } catch {}
+  }, [siteByPlaceId]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(
+        LS_BUSINESS_KEY,
+        JSON.stringify(Array.from(businessByPlaceId.entries())),
+      );
+    } catch {}
+  }, [businessByPlaceId]);
 
   // Summary of the most recent successful Research click — surfaced as a
   // banner in the main pane so the user can see at a glance what came back
@@ -118,8 +169,6 @@ export default function App() {
     setError(null);
     setSearching(true);
     setSelectedId(undefined);
-    setSelectedDetails(null);
-    setSelectedSite(null);
     setLastFilters(filters);
     try {
       const r = await searchBusinesses(filters);
@@ -211,9 +260,20 @@ export default function App() {
         throw new Error(record.error || "Generation failed");
       }
       if (!record.site) throw new Error("Generation finished with no site payload");
+      // Stash both the site and the enriched business into per-row caches —
+      // SitePreview needs both. Replaces any earlier cached pair for this row.
+      const generated = record.site;
+      setSiteByPlaceId((prev) => {
+        const next = new Map(prev);
+        next.set(b.place_id, generated);
+        return next;
+      });
+      setBusinessByPlaceId((prev) => {
+        const next = new Map(prev);
+        next.set(b.place_id, business);
+        return next;
+      });
       setSelectedId(b.place_id);
-      setSelectedDetails(business);
-      setSelectedSite(record.site);
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
     } finally {
@@ -418,12 +478,10 @@ export default function App() {
             loadingId={busyId}
             researchingId={researchingId}
             researchedIds={dossierByPlaceId}
+            siteByPlaceId={siteByPlaceId}
+            businessByPlaceId={businessByPlaceId}
           />
         </div>
-
-        {selectedDetails && selectedSite && (
-          <SitePreview business={selectedDetails} site={selectedSite} />
-        )}
       </main>
     </div>
   );
