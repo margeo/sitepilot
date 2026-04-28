@@ -185,12 +185,34 @@ export default function App() {
     return JSON.stringify(filters);
   }
 
-  // On mount: if we have a remembered lastFilters AND its SearchResponse is
-  // still in the cache, hydrate the visible results so the operator sees
-  // their last search immediately — no Google Places call, no second click.
+  // On mount: hydrate the visible results from the search cache so the
+  // operator sees their last search immediately on reload — no Google
+  // Places call, no second click.
+  //
+  //  - Preferred: lookup by the persisted lastFilters.
+  //  - Fallback (covers searches cached BEFORE lastFilters persistence
+  //    landed, or any case where the key was lost): take the most
+  //    recently added entry from searchCacheByKey. Map iteration order
+  //    is insertion order, so the last entry is the most recent search.
+  //    Re-derive filters from the cache key so the header / Refresh
+  //    button work correctly.
   useEffect(() => {
-    if (!lastFilters) return;
-    const cached = searchCacheByKey.get(searchCacheKey(lastFilters));
+    let cached: SearchResponse | undefined;
+    let derivedFilters: SearchFilters | null = null;
+
+    if (lastFilters) {
+      cached = searchCacheByKey.get(searchCacheKey(lastFilters));
+    }
+    if (!cached && searchCacheByKey.size > 0) {
+      const entries = Array.from(searchCacheByKey.entries());
+      const [lastKey, lastVal] = entries[entries.length - 1];
+      cached = lastVal;
+      try {
+        derivedFilters = JSON.parse(lastKey) as SearchFilters;
+      } catch {
+        // Malformed key — nothing to do, header just won't display the sector/location.
+      }
+    }
     if (!cached) return;
     setResults(cached.businesses);
     setDemoMode(cached.demo);
@@ -198,8 +220,7 @@ export default function App() {
     setTotalFound(cached.totalFound);
     setLastWasCached(true);
     setSearchRev((n) => n + 1);
-    // Run once on mount only; later changes to lastFilters / searchCacheByKey
-    // come from runSearch which already paints the UI itself.
+    if (derivedFilters && !lastFilters) setLastFilters(derivedFilters);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
