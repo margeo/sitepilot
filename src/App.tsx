@@ -252,6 +252,13 @@ export default function App() {
     try {
       // Enrich with place-details first so research has reviews / hours / etc.
       const { business } = await fetchDetails(b.place_id, b);
+      // Cache the enriched BusinessDetails immediately. Generate site can
+      // then skip its own /place-details call ($0.017 saved per row).
+      setBusinessByPlaceId((prev) => {
+        const next = new Map(prev);
+        next.set(b.place_id, business);
+        return next;
+      });
       const r = await researchBusiness(business, researchModel);
       // Cache the dossier so Generate site can skip its own research call.
       setDossierByPlaceId((prev) => {
@@ -303,7 +310,12 @@ export default function App() {
       setGenerationElapsed(Math.round((Date.now() - t0) / 1000));
     }, 500);
     try {
-      const { business } = await fetchDetails(b.place_id, b);
+      // Reuse the BusinessDetails cached by the prior Research click. Falls
+      // back to a fresh /place-details call only if (somehow) we have a
+      // dossier but no cached business — that shouldn't happen in normal
+      // flow but covers the edge case where the business cache was wiped.
+      const cachedBusiness = businessByPlaceId.get(b.place_id);
+      const business = cachedBusiness ?? (await fetchDetails(b.place_id, b)).business;
       const { record } = await generateSite(
         business,
         designModel,
