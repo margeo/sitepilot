@@ -82,6 +82,7 @@ export const DEMO_DATA: Record<Sector, DemoBusiness[]> = {
       photo_refs: [],
     },
   ],
+  bakeries: [],
   accommodations: [
     {
       place_id: "demo_villa_1",
