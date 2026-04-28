@@ -112,7 +112,6 @@ const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
       "cottages",
       "cabins",
       "bungalows",
-      "houseboats",
     ],
     includedTypes: [
       "hotel",
