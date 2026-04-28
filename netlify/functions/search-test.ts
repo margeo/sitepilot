@@ -69,8 +69,8 @@ export const handler: Handler = async (event) => {
   if (!location) return jsonRes(400, { error: "Pass ?location=..." });
 
   const queries = [
-    `hotels in ${location}`,
     `vacation rentals in ${location}`,
+    `hotels in ${location}`,
   ];
 
   const t0 = Date.now();
