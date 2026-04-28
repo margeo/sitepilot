@@ -1,10 +1,16 @@
-// TEMPORARY test endpoint. Fires the proposed 16-query structure
-// (Tier A umbrella + Tier B distinct + Tier C niche), each paginated to 3
-// pages, then filters to no-website places only. Reports per-query
-// uniqueAdded so we can see whether the proposed prune holds up on a new
-// location like Paros.
+// TEMPORARY test endpoint. Runs the proposed 21-query structure against a
+// location, applying the SAME filters as the live app (search-businesses.ts):
+//   - type whitelist (lodging types only)
+//   - location-token filter (address must contain a location token)
+//   - no-website
+//   - rating >= minRating (default 4)
+//   - reviewCount >= minReviews (default 10)
+//   - business not CLOSED_PERMANENTLY
+// Reports both the funnel counts and the final list — apples-to-apples with
+// what the app deep-search shows the user.
 //
-// Usage: GET /.netlify/functions/search-test?location=Paros%2C%20Greece
+// Usage: GET /.netlify/functions/search-test?location=Mykonos%2C%20Greece
+//        Optional: &minRating=4&minReviews=10
 
 import type { Handler } from "@netlify/functions";
 
@@ -13,28 +19,62 @@ const PLACES_URL = "https://places.googleapis.com/v1/places:searchText";
 interface Place {
   place_id: string;
   name: string;
+  address: string;
   rating?: number;
   reviewCount: number;
+  types: string[];
   hasWebsite: boolean;
+  businessStatus?: string;
 }
 
-// Gemini's 5 suggested keywords we don't already have. Test if they
-// surface no-website places that our existing 22-query structure misses.
-const TIER_A: string[] = [];
-const TIER_B = [
-  "glamping",
-  "guest house",
-  "cabin rental",
-  "vacation rental",
-  "cottage",
+// 21 proposed queries (current 25 minus villas, vacation rentals,
+// holiday rentals, holiday homes; plus lodging up front).
+const QUERIES = [
+  // Tier A — umbrella
+  "lodging",
+  "hotels",
+  // Tier B — hotel-tier
+  "boutique hotels",
+  "resorts",
+  "motels",
+  "inns",
+  "hostels",
+  "extended stay hotels",
+  "aparthotels",
+  // Tier C — rentals + apartments
+  "apartments for rent",
+  "condos",
+  "studios",
+  "serviced apartments",
+  "seaside apartments",
+  "bed and breakfasts",
+  "guesthouses",
+  // Tier D — specialty
+  "farmstays",
+  "cottages",
+  "cabins",
+  "bungalows",
+  "houseboats",
 ];
-const TIER_C: string[] = [];
 
-async function placesPaginated(
-  apiKey: string,
-  textQuery: string,
-  maxPages = 3,
-): Promise<Place[]> {
+// Same lodging-type whitelist as cfg.includedTypes.accommodations in
+// search-businesses.ts.
+const LODGING_TYPE_WHITELIST = new Set([
+  "hotel",
+  "resort_hotel",
+  "motel",
+  "inn",
+  "bed_and_breakfast",
+  "cottage",
+  "extended_stay_hotel",
+  "farmstay",
+  "guest_house",
+  "hostel",
+  "lodging",
+  "private_guest_room",
+]);
+
+async function placesPaginated(apiKey: string, textQuery: string, maxPages = 3): Promise<Place[]> {
   const all: Place[] = [];
   let pageToken: string | undefined;
   for (let page = 0; page < maxPages; page++) {
@@ -46,7 +86,7 @@ async function placesPaginated(
         "Content-Type": "application/json",
         "X-Goog-Api-Key": apiKey,
         "X-Goog-FieldMask":
-          "places.id,places.displayName,places.rating,places.userRatingCount,places.websiteUri,nextPageToken",
+          "places.id,places.displayName,places.formattedAddress,places.rating,places.userRatingCount,places.types,places.websiteUri,places.businessStatus,nextPageToken",
       },
       body: JSON.stringify(body),
     });
@@ -59,9 +99,12 @@ async function placesPaginated(
       places?: Array<{
         id: string;
         displayName?: { text?: string };
+        formattedAddress?: string;
         rating?: number;
         userRatingCount?: number;
+        types?: string[];
         websiteUri?: string;
+        businessStatus?: string;
       }>;
       nextPageToken?: string;
     };
@@ -69,9 +112,12 @@ async function placesPaginated(
       all.push({
         place_id: p.id,
         name: p.displayName?.text ?? "",
+        address: p.formattedAddress ?? "",
         rating: p.rating,
         reviewCount: p.userRatingCount ?? 0,
+        types: p.types ?? [],
         hasWebsite: Boolean(p.websiteUri),
+        businessStatus: p.businessStatus,
       });
     }
     pageToken = data.nextPageToken;
@@ -95,34 +141,59 @@ export const handler: Handler = async (event) => {
 
   const location = event.queryStringParameters?.location?.trim();
   if (!location) return jsonRes(400, { error: "Pass ?location=..." });
+  const minRating = Number(event.queryStringParameters?.minRating ?? 4);
+  const minReviews = Number(event.queryStringParameters?.minReviews ?? 10);
 
-  const queries = [
-    ...TIER_A.map((q) => ({ tier: "A", query: `${q} in ${location}` })),
-    ...TIER_B.map((q) => ({ tier: "B", query: `${q} in ${location}` })),
-    ...TIER_C.map((q) => ({ tier: "C", query: `${q} in ${location}` })),
-  ];
+  const queries = QUERIES.map((q) => `${q} in ${location}`);
 
   const t0 = Date.now();
-  const batches = await Promise.all(queries.map((q) => placesPaginated(apiKey, q.query, 3)));
+  const batches = await Promise.all(queries.map((q) => placesPaginated(apiKey, q, 3)));
   const elapsedMs = Date.now() - t0;
 
-  // Pre-filter: drop places that already have a website
-  const noWebsiteBatches = batches.map((b) => b.filter((p) => !p.hasWebsite));
+  // Dedupe by place_id (keep first occurrence — earlier query gets credit)
+  const byId = new Map<string, Place>();
+  for (const list of batches) for (const p of list) if (!byId.has(p.place_id)) byId.set(p.place_id, p);
+  let raw = Array.from(byId.values());
+  const totalRaw = raw.length;
 
+  // Type whitelist (any-of)
+  raw = raw.filter((r) => r.types.some((t) => LODGING_TYPE_WHITELIST.has(t)));
+  const afterTypeWhitelist = raw.length;
+
+  // Location-token filter (same as deep mode)
+  const locTokens = location
+    .toLowerCase()
+    .split(/[,/]/)
+    .map((s) => s.trim())
+    .filter((s) => s.length > 2);
+  if (locTokens.length > 0) {
+    raw = raw.filter((r) => {
+      const addr = (r.address || "").toLowerCase();
+      return locTokens.some((t) => addr.includes(t));
+    });
+  }
+  const afterLocationFilter = raw.length;
+
+  // Final filters: no-website + rating + reviews + not closed
+  const final = raw.filter(
+    (r) =>
+      !r.hasWebsite &&
+      (r.rating ?? 0) >= minRating &&
+      r.reviewCount >= minReviews &&
+      r.businessStatus !== "CLOSED_PERMANENTLY",
+  );
+
+  // Per-query unique-added (against the deduped raw set, no filters yet)
   const seen = new Set<string>();
   const perQuery = queries.map((q, i) => {
-    const fullBatch = batches[i];
-    const filtered = noWebsiteBatches[i];
-    const newOnes = filtered.filter((b) => !seen.has(b.place_id));
+    const batch = batches[i];
+    const newOnes = batch.filter((b) => !seen.has(b.place_id));
     for (const b of newOnes) seen.add(b.place_id);
     return {
-      tier: q.tier,
-      query: q.query,
-      paginatedCalls: Math.max(1, Math.ceil(fullBatch.length / 20)),
-      returned: fullBatch.length,
-      noWebsite: filtered.length,
+      query: q,
+      paginatedCalls: Math.max(1, Math.ceil(batch.length / 20)),
+      returned: batch.length,
       uniqueAdded: newOnes.length,
-      newNames: newOnes.map((b) => b.name),
     };
   });
 
@@ -130,10 +201,23 @@ export const handler: Handler = async (event) => {
 
   return jsonRes(200, {
     location,
+    minRating,
+    minReviews,
     queriesFired: queries.length,
     totalCalls,
-    totalUnique: seen.size,
     elapsedMs,
+    funnel: {
+      totalRaw,
+      afterTypeWhitelist,
+      afterLocationFilter,
+      finalShown: final.length,
+    },
+    finalList: final.map((p) => ({
+      name: p.name,
+      address: p.address,
+      rating: p.rating,
+      reviewCount: p.reviewCount,
+    })),
     perQuery,
   });
 };
