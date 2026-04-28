@@ -9,6 +9,11 @@ interface Body {
   minRating?: number;
   minReviews?: number;
   maxResults?: number;
+  // When true, the endpoint just reports whether GOOGLE_MAPS_API_KEY is
+  // configured and exits — no sector validation, no Places calls. The
+  // frontend uses this on page load to set its demo-mode banner without
+  // burning ~42 paid Text Search calls per refresh.
+  probe?: boolean;
 }
 
 interface Basic {
@@ -283,6 +288,16 @@ export const handler: Handler = async (event) => {
   } catch {
     return jsonRes(400, { error: "Invalid JSON body" });
   }
+
+  // Cheap demo-mode probe — short-circuit before any sector lookup or
+  // Places calls. Used by the frontend on page load.
+  if (body.probe === true) {
+    return jsonRes(200, {
+      probe: true,
+      demo: !process.env.GOOGLE_MAPS_API_KEY,
+    });
+  }
+
   const {
     sector,
     location,

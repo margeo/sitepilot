@@ -102,11 +102,12 @@ export default function App() {
   const [lastResearch, setLastResearch] = useState<ResearchSummary | null>(null);
 
   // Probe the backend once on mount to know whether we're in demo mode.
+  // Uses the dedicated `probe: true` short-circuit — no Places API calls.
   useEffect(() => {
     fetch("/.netlify/functions/search-businesses", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ sector: "restaurant", location: "Paros, Greece", maxResults: 1 }),
+      body: JSON.stringify({ probe: true }),
     })
       .then((r) => r.json())
       .then((r: { demo?: boolean }) => setDemoMode(Boolean(r.demo)))
