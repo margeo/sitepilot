@@ -523,9 +523,13 @@ function SiteVersionsPanel({
     sites.find((s) => s.provider === activeProvider) ?? sites[sites.length - 1];
 
   function labelFor(s: GeneratedSite): string {
-    // Strip the "manual:" prefix on display ("manual:claude" → "Claude").
-    const provider = (s.provider ?? "").replace(/^manual:/, "");
-    if (provider === "claude") return "Claude";
+    // Strip the "manual:" prefix on display ("manual:claude" → "Claude.ai").
+    // Also handle legacy entries saved before multi-provider support, where
+    // provider was just "manual" — those were always Claude.
+    const raw = s.provider ?? "";
+    if (raw === "manual") return "Claude.ai";
+    const provider = raw.replace(/^manual:/, "");
+    if (provider === "claude") return "Claude.ai";
     if (provider === "chatgpt") return "ChatGPT";
     if (provider === "gemini") return "Gemini";
     if (provider.startsWith("v3_")) return "API";
@@ -613,12 +617,6 @@ function SiteVersionsPanel({
                 }}
               >
                 {labelFor(s)}
-                {typeof s.api_equivalent_cost_usd === "number" && (
-                  <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>
-                    {" "}
-                    · ~${s.api_equivalent_cost_usd.toFixed(2)}
-                  </span>
-                )}
               </button>
             );
           })}
