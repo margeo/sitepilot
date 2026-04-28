@@ -102,7 +102,15 @@ export function SitePreview({ business, site }: Props) {
           className="preview-iframe"
           title={`${business.name} preview`}
           srcDoc={site.html}
-          sandbox="allow-same-origin"
+          // allow-scripts: needed for any JS the LLM emits (mobile menu,
+          //   intersection observers, smooth scroll, gallery sliders, etc.).
+          // allow-same-origin: keeps localStorage / fetch from the iframe
+          //   working — generated sites occasionally rely on it.
+          // Combination is a stated MDN risk, but the content is our own
+          //   model output rendered into our own preview UI; not a
+          //   third-party embed.
+          sandbox="allow-scripts allow-same-origin allow-popups allow-popups-to-escape-sandbox"
+          referrerPolicy="no-referrer"
         />
       </div>
     </div>
