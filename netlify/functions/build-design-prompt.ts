@@ -13,13 +13,24 @@ import {
 } from "./_shared/designer-prompt";
 import type { Dossier } from "./_shared/dossier";
 
+// The frontend sends the cached BusinessDetails (which has photo_refs but
+// no photo_urls). buildDesignerUserPrompt expects photo_urls — the API
+// path converts them inside generate-site-background.ts. We do the same
+// conversion here so the manual path doesn't end up with
+// "(none — use labelled SVG placeholders)" in the prompt.
+interface IncomingBusiness extends DesignerBusiness {
+  photo_refs?: string[];
+}
+
 interface Body {
-  business: DesignerBusiness;
+  business: IncomingBusiness;
   dossier: Dossier;
   // When set, relative photo URLs (/.netlify/functions/photos?...) are
-  // rewritten to absolute (${origin}/.netlify/functions/photos?...) so a
-  // claude.ai project that pre-fetches URLs sees real images. Pure chat
-  // without URL fetching ignores the difference.
+  // rewritten to absolute (${origin}/.netlify/functions/photos?...) so
+  // <img src> tags in the generated HTML resolve in any browser context
+  // (claude.ai chat preview, downloaded file, blob URL, etc.). Without
+  // origin we'd emit relative paths that only work inside the SitePilot
+  // tab's iframe.
   origin?: string;
 }
 
@@ -43,7 +54,19 @@ export const handler: Handler = async (event) => {
     return jsonRes(400, { error: "business.name and dossier are required" });
   }
 
-  const userPrompt = buildDesignerUserPrompt({ business: body.business, dossier: body.dossier });
+  // Mirror generate-site-background.ts: derive photo_urls from photo_refs
+  // when the caller didn't pre-build them. Cap at 10 to match the API path.
+  const businessForPrompt: DesignerBusiness = {
+    ...body.business,
+    photo_urls:
+      body.business.photo_urls && body.business.photo_urls.length > 0
+        ? body.business.photo_urls
+        : (body.business.photo_refs ?? [])
+            .slice(0, 10)
+            .map((ref) => `/.netlify/functions/photos?reference=${encodeURIComponent(ref)}&maxwidth=1600`),
+  };
+
+  const userPrompt = buildDesignerUserPrompt({ business: businessForPrompt, dossier: body.dossier });
   const combined = `${DESIGNER_SYSTEM_FULL}\n\n---\n\n${userPrompt}`;
   const finalPrompt = body.origin
     ? combined.replace(

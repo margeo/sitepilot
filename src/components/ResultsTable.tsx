@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
 import type { BusinessBasic, BusinessDetails, GeneratedSite } from "../types";
 import { SitePreview } from "./SitePreview";
 import { ManualGeneratePanel } from "./ManualGeneratePanel";
@@ -52,9 +52,11 @@ interface DossierShape {
 
 function DossierPanel({
   dossier,
+  business,
   onClose,
 }: {
   dossier: DossierShape;
+  business?: BusinessDetails;
   onClose: () => void;
 }) {
   const bi = dossier.brand_identity ?? {};
@@ -237,6 +239,122 @@ function DossierPanel({
               </span>
             );
           })}
+        </div>
+      )}
+
+      {business && (
+        <div
+          style={{
+            marginTop: 16,
+            paddingTop: 14,
+            borderTop: "1px dashed var(--border)",
+          }}
+        >
+          <div
+            style={{
+              color: "var(--accent)",
+              fontWeight: 700,
+              fontSize: 11,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              marginBottom: 10,
+            }}
+          >
+            Google Places data
+          </div>
+          <BusinessFacts business={business} />
+        </div>
+      )}
+    </div>
+  );
+}
+
+function BusinessFacts({ business: b }: { business: BusinessDetails }) {
+  const phonesAll = [...(b.phones?.mobiles ?? []), ...(b.phones?.landlines ?? [])];
+  const reviewsTop = (b.reviews ?? []).slice(0, 3);
+  const Row = ({
+    label,
+    children,
+  }: {
+    label: string;
+    children: ReactNode;
+  }) => (
+    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 10, marginBottom: 6 }}>
+      <span style={{ color: "var(--text-muted)" }}>{label}</span>
+      <span>{children}</span>
+    </div>
+  );
+  return (
+    <div>
+      <Row label="Lead score">
+        {b.lead_score}/10
+        {b.lead_score_reasons && b.lead_score_reasons.length > 0 && (
+          <span style={{ color: "var(--text-muted)" }}> · {b.lead_score_reasons.join(" · ")}</span>
+        )}
+      </Row>
+      <Row label="Rating">
+        {typeof b.rating === "number" ? `★ ${b.rating.toFixed(1)}` : "—"}
+        <span style={{ color: "var(--text-muted)" }}> · {b.user_ratings_total ?? 0} reviews</span>
+      </Row>
+      <Row label="Mobiles">
+        {b.phones?.mobiles?.length ? b.phones.mobiles.join(", ") : <em style={{ color: "var(--text-muted)" }}>—</em>}
+      </Row>
+      <Row label="Landlines">
+        {b.phones?.landlines?.length ? b.phones.landlines.join(", ") : <em style={{ color: "var(--text-muted)" }}>—</em>}
+      </Row>
+      {phonesAll.length === 0 && (
+        <Row label="">
+          <span style={{ color: "var(--warn)", fontSize: 11 }}>
+            No phone numbers from Google — site CTAs will fall back to map link only.
+          </span>
+        </Row>
+      )}
+      <Row label="Photos">{b.photo_refs?.length ?? 0}</Row>
+      {b.opening_hours && b.opening_hours.length > 0 && (
+        <Row label="Hours">
+          <ul style={{ margin: 0, paddingLeft: 16 }}>
+            {b.opening_hours.map((line, i) => (
+              <li key={i} style={{ listStyle: "none" }}>{line}</li>
+            ))}
+          </ul>
+        </Row>
+      )}
+      {b.editorial_summary && (
+        <Row label="Google blurb">
+          <em>{b.editorial_summary}</em>
+        </Row>
+      )}
+      {b.primary_type_display && <Row label="Primary type">{b.primary_type_display}</Row>}
+      {b.google_maps_uri && (
+        <Row label="Maps URL">
+          <a
+            href={b.google_maps_uri}
+            target="_blank"
+            rel="noopener noreferrer"
+            style={{ color: "var(--accent)", textDecoration: "none" }}
+          >
+            open in Google Maps
+          </a>
+        </Row>
+      )}
+      <Row label="Place ID">
+        <code style={{ fontSize: 11, color: "var(--text-muted)" }}>{b.place_id}</code>
+      </Row>
+      {reviewsTop.length > 0 && (
+        <div style={{ marginTop: 10 }}>
+          <div style={{ color: "var(--text-muted)", marginBottom: 4 }}>Top reviews:</div>
+          {reviewsTop.map((r, i) => (
+            <div key={i} style={{ marginBottom: 4 }}>
+              <strong style={{ fontSize: 12 }}>{r.author ?? "Guest"}</strong>
+              {typeof r.rating === "number" && (
+                <span style={{ color: "var(--text-muted)" }}> · ★ {r.rating}</span>
+              )}
+              {r.relative_time && (
+                <span style={{ color: "var(--text-muted)" }}> · {r.relative_time}</span>
+              )}
+              <div style={{ fontStyle: "italic" }}>{r.text}</div>
+            </div>
+          ))}
         </div>
       )}
     </div>
@@ -500,7 +618,11 @@ export function ResultsTable({
               </div>
             </div>
             {isPanelOpen && dossier && (
-              <DossierPanel dossier={dossier} onClose={() => closePanel(b.place_id)} />
+              <DossierPanel
+                dossier={dossier}
+                business={cachedBusiness}
+                onClose={() => closePanel(b.place_id)}
+              />
             )}
             {manualOpenIds.has(b.place_id) &&
               isResearched &&
