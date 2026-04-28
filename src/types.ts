@@ -221,6 +221,11 @@ export interface JobRecord {
   updatedAt: number;
   modelId: DesignModelId;
   researchModelId?: DesignModelId;
+  // Confirmed model strings echoed back by the underlying APIs (the served
+  // model). Compare against modelId / researchModelId to verify the run
+  // actually used the model the UI requested.
+  actualResearchModel?: string;
+  actualDesignModel?: string;
   businessName: string;
   site?: GeneratedSite;
   dossier?: unknown;

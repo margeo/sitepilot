@@ -31,6 +31,11 @@ interface JobRecord {
   updatedAt: number;
   modelId: string;
   researchModelId?: string;
+  // What the underlying APIs echoed back as the actual served model. These
+  // are the proof that the call ran on the model we asked for (vs an OR
+  // fallback or a stale identifier). Filled in after each phase succeeds.
+  actualResearchModel?: string;
+  actualDesignModel?: string;
   businessName: string;
   site?: {
     html: string;
@@ -88,7 +93,11 @@ export default async (req: Request, _context: Context) => {
     }
 
     const researchStart = Date.now();
-    const { dossier, usage: researchUsage } = await researchBusiness(business, researchModelId);
+    const {
+      dossier,
+      model: actualResearchModel,
+      usage: researchUsage,
+    } = await researchBusiness(business, researchModelId);
     const researchMs = Date.now() - researchStart;
 
     await writeJob(jobId, {
@@ -96,6 +105,7 @@ export default async (req: Request, _context: Context) => {
       status: "designing",
       updatedAt: Date.now(),
       dossier,
+      actualResearchModel,
       usage: { research: researchUsage },
       elapsedMs: { research: researchMs },
     });
@@ -124,6 +134,8 @@ export default async (req: Request, _context: Context) => {
       status: "done",
       updatedAt: Date.now(),
       dossier,
+      actualResearchModel,
+      actualDesignModel: design.model,
       usage: { research: researchUsage, design: design.usage },
       elapsedMs: {
         research: researchMs,

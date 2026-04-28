@@ -229,21 +229,24 @@ export async function generateSite(
         );
         console.table({
           "Research model": {
-            model: record.researchModelId ?? "(none)",
+            requested: record.researchModelId ?? "(none)",
+            served_by_api: record.actualResearchModel ?? "(not reported)",
             in_tokens: fmtTokens(r?.input_tokens),
             out_tokens: fmtTokens(r?.output_tokens),
             cost_USD: fmtUSD(researchCost),
             elapsed_s: ((record.elapsedMs?.research ?? 0) / 1000).toFixed(1),
           },
           "Design model": {
-            model: record.modelId ?? "(none)",
+            requested: record.modelId ?? "(none)",
+            served_by_api: record.actualDesignModel ?? "(not reported)",
             in_tokens: fmtTokens(d?.input_tokens),
             out_tokens: fmtTokens(d?.output_tokens),
             cost_USD: fmtUSD(designCost),
             elapsed_s: ((record.elapsedMs?.design ?? 0) / 1000).toFixed(1),
           },
           TOTAL: {
-            model: "—",
+            requested: "—",
+            served_by_api: "—",
             in_tokens: "—",
             out_tokens: "—",
             cost_USD: fmtUSD(totalCost),

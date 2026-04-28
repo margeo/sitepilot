@@ -60,6 +60,7 @@ export async function callGemini(input: GroundedRequest): Promise<GroundedRespon
         groundingSupports?: Array<{ segment?: { text?: string } }>;
       };
     }>;
+    modelVersion?: string;
     usageMetadata?: {
       promptTokenCount?: number;
       candidatesTokenCount?: number;
@@ -77,10 +78,12 @@ export async function callGemini(input: GroundedRequest): Promise<GroundedRespon
     snippet: sourceSnippets[i],
   }));
 
+  // Prefer modelVersion from response payload (the actual served model).
+  // Falls back to requested model if Gemini omits it for some reason.
   return {
     text,
     groundingSources,
-    model,
+    model: data.modelVersion || model,
     usage: {
       input_tokens: data.usageMetadata?.promptTokenCount,
       output_tokens: data.usageMetadata?.candidatesTokenCount,

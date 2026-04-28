@@ -47,7 +47,7 @@ export async function callDesigner(input: DesignerInput): Promise<LLMResult> {
       user: input.user,
       maxTokens: input.maxTokens,
     });
-    return { text: r.text, provider: "openrouter", model, usage: r.usage };
+    return { text: r.text, provider: "openrouter", model: r.actualModel || model, usage: r.usage };
   }
   if (provider === "anthropic") {
     const key = process.env.ANTHROPIC_API_KEY;
@@ -81,7 +81,9 @@ async function callAnthropicFull(key: string, model: string, input: LLMInput): P
   return {
     text,
     provider: "anthropic",
-    model,
+    // msg.model is the actual served model (e.g. "claude-haiku-4-5-20250101")
+    // and confirms the API used what we asked for. Fall back to requested if absent.
+    model: msg.model || model,
     usage: { input_tokens: msg.usage?.input_tokens, output_tokens: msg.usage?.output_tokens },
   };
 }
@@ -113,6 +115,7 @@ async function callAnthropicWithSkill(
 
   const msg = (await client.beta.messages.create(body)) as {
     content: Array<{ type: string; text?: string }>;
+    model?: string;
     usage?: { input_tokens?: number; output_tokens?: number };
   };
   const text = msg.content
@@ -122,7 +125,7 @@ async function callAnthropicWithSkill(
   return {
     text,
     provider: "anthropic",
-    model,
+    model: msg.model || model,
     usage: { input_tokens: msg.usage?.input_tokens, output_tokens: msg.usage?.output_tokens },
   };
 }
@@ -147,7 +150,11 @@ async function callOpenRouter(
   key: string,
   model: string,
   input: LLMInput,
-): Promise<{ text: string; usage?: { input_tokens?: number; output_tokens?: number } }> {
+): Promise<{
+  text: string;
+  actualModel?: string;
+  usage?: { input_tokens?: number; output_tokens?: number };
+}> {
   const userContent: Array<Record<string, unknown>> = [{ type: "text", text: input.user }];
   for (const img of input.images ?? []) {
     userContent.push({ type: "image_url", image_url: { url: img } });
@@ -174,6 +181,7 @@ async function callOpenRouter(
     throw new Error(`OpenRouter ${res.status}: ${errText}`);
   }
   const data = (await res.json()) as {
+    model?: string;
     choices?: Array<{ message?: { content?: string } }>;
     usage?: { prompt_tokens?: number; completion_tokens?: number };
   };
@@ -181,6 +189,7 @@ async function callOpenRouter(
   if (!text) throw new Error("OpenRouter returned empty content");
   return {
     text,
+    actualModel: data.model,
     usage: {
       input_tokens: data.usage?.prompt_tokens,
       output_tokens: data.usage?.completion_tokens,

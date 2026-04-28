@@ -208,6 +208,7 @@ async function researchViaOpenRouter(
     throw new Error(`Research (OpenRouter :online) ${res.status}: ${errText.slice(0, 300)}`);
   }
   const data = (await res.json()) as {
+    model?: string;
     choices?: Array<{
       message?: {
         content?: string;
@@ -231,9 +232,11 @@ async function researchViaOpenRouter(
       .map((a) => ({ title: a.url_citation?.title, uri: a.url_citation?.url }));
     if (sources.length) dossier.sources = sources;
   }
+  // Prefer the model field from the response payload — that's the one the
+  // API actually served, including any OR fallback routing.
   return {
     dossier,
-    model,
+    model: data.model || model,
     usage: { input_tokens: data.usage?.prompt_tokens, output_tokens: data.usage?.completion_tokens },
   };
 }
@@ -258,6 +261,7 @@ async function researchViaAnthropic(
 
   const msg = (await client.messages.create(body)) as {
     content: Array<{ type: string; text?: string; citations?: Array<{ url?: string; title?: string }> }>;
+    model?: string;
     usage?: { input_tokens?: number; output_tokens?: number };
   };
 
@@ -277,7 +281,7 @@ async function researchViaAnthropic(
   if (!dossier.sources?.length && citations.length > 0) dossier.sources = citations;
   return {
     dossier,
-    model,
+    model: msg.model || model,
     usage: { input_tokens: msg.usage?.input_tokens, output_tokens: msg.usage?.output_tokens },
   };
 }
