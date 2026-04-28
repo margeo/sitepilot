@@ -105,43 +105,89 @@ export interface DesignModelOption {
 export const DESIGN_MODELS: DesignModelOption[] = [
   {
     value: "openrouter:google/gemini-3.1-flash-lite-preview",
-    label: "Gemini 3.1 Flash Lite · OpenRouter",
-    hint: "Fastest, cheapest. ~$0.06/site.",
+    label: "Gemini 3.1 Flash Lite · OpenRouter — ~$0.06/site",
+    hint: "Fastest, cheapest design model.",
   },
   {
     value: "openrouter:google/gemini-3.1-pro-preview",
-    label: "Gemini 3.1 Pro · OpenRouter",
-    hint: "Mid-tier quality. ~$0.47/site.",
+    label: "Gemini 3.1 Pro · OpenRouter — ~$0.47/site",
+    hint: "Mid-tier quality.",
   },
   {
     value: "openrouter:anthropic/claude-haiku-4.5",
-    label: "Claude Haiku 4.5 · OpenRouter",
-    hint: "Cheap Claude. ~$0.20/site.",
+    label: "Claude Haiku 4.5 · OpenRouter — ~$0.20/site",
+    hint: "Cheap Claude.",
   },
   {
     value: "openrouter:anthropic/claude-sonnet-4.6",
-    label: "Claude Sonnet 4.6 · OpenRouter",
-    hint: "High quality. ~$0.60/site.",
+    label: "Claude Sonnet 4.6 · OpenRouter — ~$0.60/site",
+    hint: "High quality.",
   },
   {
     value: "openrouter:anthropic/claude-opus-4.7",
-    label: "Claude Opus 4.7 · OpenRouter",
-    hint: "Top quality. ~$1.00/site.",
+    label: "Claude Opus 4.7 · OpenRouter — ~$1.00/site",
+    hint: "Top quality.",
   },
   {
     value: "anthropic:claude-haiku-4-5",
-    label: "Claude Haiku 4.5 · Anthropic direct",
-    hint: "Cheap Claude, direct API. ~$0.20/site.",
+    label: "Claude Haiku 4.5 · Anthropic direct — ~$0.20/site",
+    hint: "Cheap Claude, direct API.",
   },
   {
     value: "anthropic:claude-sonnet-4-6",
-    label: "Claude Sonnet 4.6 · Anthropic direct",
-    hint: "High quality, direct API. ~$0.60/site.",
+    label: "Claude Sonnet 4.6 · Anthropic direct — ~$0.60/site",
+    hint: "High quality, direct API.",
   },
   {
     value: "anthropic:claude-opus-4-7",
-    label: "Claude Opus 4.7 · Anthropic direct",
-    hint: "Top quality, direct API. ~$1.00/site.",
+    label: "Claude Opus 4.7 · Anthropic direct — ~$1.00/site",
+    hint: "Top quality, direct API.",
+  },
+];
+
+// Research-model dropdown — same model IDs as DESIGN_MODELS but with
+// research-phase costs and reliability flags from empirical testing
+// (2026-04-28, Sevasti + Iapetos businesses on Symi).
+export const RESEARCH_MODELS: DesignModelOption[] = [
+  {
+    value: "openrouter:google/gemini-3.1-flash-lite-preview",
+    label: "Gemini 3.1 Flash Lite · OpenRouter — ~$0.006/dossier",
+    hint: "Cheapest. Surprisingly thorough — typical 10 sources, ~5s.",
+  },
+  {
+    value: "openrouter:google/gemini-3.1-pro-preview",
+    label: "Gemini 3.1 Pro · OpenRouter — ~$0.06/dossier (unreliable)",
+    hint: "JSON parse failures observed — avoid until fixed.",
+  },
+  {
+    value: "openrouter:anthropic/claude-haiku-4.5",
+    label: "Claude Haiku 4.5 · OpenRouter — ~$0.03/dossier",
+    hint: "Best value. 5/6/6 dossier (sources/sigs/reviews), ~12s, 100% reliable.",
+  },
+  {
+    value: "openrouter:anthropic/claude-sonnet-4.6",
+    label: "Claude Sonnet 4.6 · OpenRouter — ~$0.08/dossier",
+    hint: "Same content as Haiku OR. Slower; pay only if Haiku misses something.",
+  },
+  {
+    value: "openrouter:anthropic/claude-opus-4.7",
+    label: "Claude Opus 4.7 · OpenRouter — ~$0.18/dossier",
+    hint: "Marginal vs Haiku/Sonnet OR. Skip unless dossier matters a lot.",
+  },
+  {
+    value: "anthropic:claude-haiku-4-5",
+    label: "Claude Haiku 4.5 · Anthropic direct — ~$0.14/dossier",
+    hint: "Direct API + web_search. Bookkeeping bug: reports 0 sources despite searching.",
+  },
+  {
+    value: "anthropic:claude-sonnet-4-6",
+    label: "Claude Sonnet 4.6 · Anthropic direct — ~$0.31/dossier",
+    hint: "Premium. Deepest grounding — 13-17 sources via multi-round web_search, ~52s.",
+  },
+  {
+    value: "anthropic:claude-opus-4-7",
+    label: "Claude Opus 4.7 · Anthropic direct — ~$0.33/dossier (unreliable)",
+    hint: "JSON parse failures observed — Sonnet direct delivers similar quality more reliably.",
   },
 ];
 

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import {
   DESIGN_MODELS,
+  RESEARCH_MODELS,
   SECTORS,
   type DesignModelId,
   type SearchFilters,
@@ -38,7 +39,7 @@ export function SearchForm({
     ? DESIGN_MODELS.find((m) => m.value === designModel)?.hint
     : undefined;
   const researchModelHint = researchModel
-    ? DESIGN_MODELS.find((m) => m.value === researchModel)?.hint
+    ? RESEARCH_MODELS.find((m) => m.value === researchModel)?.hint
     : undefined;
   const [sector, setSector] = useState<Sector>("restaurants_tavernas");
   const [location, setLocation] = useState("Paros, Greece");
@@ -298,7 +299,7 @@ export function SearchForm({
           required
         >
           <option value="">— Select a research model —</option>
-          {DESIGN_MODELS.map((m) => (
+          {RESEARCH_MODELS.map((m) => (
             <option key={m.value} value={m.value}>
               {m.label}
             </option>
