@@ -1,8 +1,12 @@
 :root {
-  --bg: #0b0d10;
-  --bg-elev: #12161b;
+  /* Outside-lighter, inside-darker palette: cards (--bg-card) sit visually
+     "inset" inside the sidebar (--bg-elev), which sits inside the page
+     (--bg). Each step lighter by a few hex points so cards stay clearly
+     distinguishable as content panels. */
+  --bg: #20262e;
+  --bg-elev: #2a313a;
   --bg-card: #161b22;
-  --border: #232a33;
+  --border: #2d343d;
   --text: #e6edf3;
   --text-muted: #8b96a3;
   --accent: #3fb950;
