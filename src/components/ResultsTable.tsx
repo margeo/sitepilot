@@ -514,10 +514,18 @@ export function ResultsTable({
 }: Props) {
   // Place_ids whose dossier panel the user has manually closed. The dossier
   // itself stays cached in researchedIds (so Generate site still works);
-  // only the panel UI is hidden.
-  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
+  // only the panel UI is hidden. On every fresh mount (page load / refresh)
+  // we seed the set with every cached place_id so persisted panels start
+  // CLOSED — otherwise reload would auto-open every dossier the operator
+  // ever researched. New mid-session actions (Research click, manual save)
+  // still remove from the set to auto-open their result, as before.
+  const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() =>
+    researchedIds ? new Set(researchedIds.keys()) : new Set(),
+  );
   // Same pattern for the per-row generated-site preview panel.
-  const [collapsedSiteIds, setCollapsedSiteIds] = useState<Set<string>>(() => new Set());
+  const [collapsedSiteIds, setCollapsedSiteIds] = useState<Set<string>>(() =>
+    siteByPlaceId ? new Set(siteByPlaceId.keys()) : new Set(),
+  );
   // And for the standalone business-object panel (Google Places data
   // separated from the AI-derived dossier). Inverted relative to
   // dossier/site: tracks place_ids that ARE open. Closed by default
