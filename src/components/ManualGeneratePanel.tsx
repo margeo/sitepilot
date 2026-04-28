@@ -132,6 +132,20 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
     }
   }
 
+  async function copyPromptOnly() {
+    if (!prompt) return;
+    try {
+      await navigator.clipboard.writeText(prompt);
+      setNote(
+        `Prompt copied to clipboard (~${(prompt.length / 4).toFixed(0)} tokens). Paste it into whatever AI tab you already have open.`,
+      );
+    } catch (err) {
+      setNote(
+        `Could not write to clipboard: ${err instanceof Error ? err.message : String(err)}. Use "Show prompt" to copy manually.`,
+      );
+    }
+  }
+
   async function pasteFromClipboardAndSave() {
     try {
       const text = await navigator.clipboard.readText();
@@ -297,6 +311,15 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
                   </button>
                 );
               })}
+              <button
+                type="button"
+                className="btn btn-sm btn-secondary"
+                onClick={copyPromptOnly}
+                disabled={!prompt}
+                title="Copy the prompt to clipboard without opening anything — useful when you already have an AI tab open."
+              >
+                Copy prompt
+              </button>
               <button
                 type="button"
                 className="btn btn-sm btn-secondary"
