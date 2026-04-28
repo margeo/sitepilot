@@ -75,31 +75,7 @@ export interface SearchResponse {
   };
 }
 
-export interface SearchLogContext {
-  researchModelId?: DesignModelId;
-  designModelId?: DesignModelId;
-}
-
-function modelLabelForLog(id: DesignModelId | undefined, kind: "research" | "design"): string {
-  if (!id) return "(none selected)";
-  const rates = MODEL_RATES[id];
-  if (!rates) return id;
-  // Estimate per-call cost the same way generate-site does, but with
-  // representative token counts so the user sees ballpark before running.
-  // Research: ~5k in / ~2k out + search surcharge.
-  // Design: ~8k in / ~6k out, no search surcharge.
-  if (kind === "research") {
-    const est = (5000 * rates.inPer1M + 2000 * rates.outPer1M) / 1_000_000 + rates.researchSearchUSD;
-    return `${id} (~${fmtUSD(est)}/dossier)`;
-  }
-  const est = (8000 * rates.inPer1M + 6000 * rates.outPer1M) / 1_000_000;
-  return `${id} (~${fmtUSD(est)}/site)`;
-}
-
-export async function searchBusinesses(
-  filters: SearchFilters,
-  ctx: SearchLogContext = {},
-): Promise<SearchResponse> {
+export async function searchBusinesses(filters: SearchFilters): Promise<SearchResponse> {
   const t0 = performance.now();
   console.log("[search] →", filters);
   const res = await post<SearchResponse>("search-businesses", filters);
@@ -133,15 +109,6 @@ export async function searchBusinesses(
     },
   });
 
-  console.log(
-    "%cSelected models for next phase (Generate Site):",
-    "color: #fa5; font-weight: bold;",
-  );
-  console.table({
-    "Research model": { id_and_estimate: modelLabelForLog(ctx.researchModelId, "research") },
-    "Design model": { id_and_estimate: modelLabelForLog(ctx.designModelId, "design") },
-  });
-
   if (dbg.perQuery && dbg.perQuery.length > 0) {
     console.groupCollapsed(`Per-query breakdown (${dbg.perQuery.length})`);
     console.table(
@@ -152,11 +119,23 @@ export async function searchBusinesses(
             api_calls: q.apiCalls,
             returned: q.returned,
             unique_added: q.uniqueAdded,
-            new_names_sample: q.newNames.slice(0, 3).join(", ") + (q.newNames.length > 3 ? "…" : ""),
           },
         ]),
       ),
     );
+    console.groupCollapsed("Full names per query");
+    for (const q of dbg.perQuery) {
+      if (q.newNames.length === 0) {
+        console.log(`%c${q.query}%c → 0 new`, "color: #888;", "color: inherit;");
+      } else {
+        console.log(
+          `%c${q.query}%c → ${q.newNames.length} new:\n  ${q.newNames.join("\n  ")}`,
+          "color: #5fa; font-weight: bold;",
+          "color: inherit;",
+        );
+      }
+    }
+    console.groupEnd();
     console.groupEnd();
   }
 
@@ -167,10 +146,17 @@ export async function searchBusinesses(
   console.log("Raw response:", res);
   console.groupEnd();
 
-  // Save full result + context for ad-hoc inspection later (window._lastSearch).
+  // Save full result for ad-hoc inspection later (window._lastSearch).
   (
-    window as unknown as { _lastSearch?: { filters: SearchFilters; response: SearchResponse; elapsedMs: number; ctx: SearchLogContext; placesCostUSD: number } }
-  )._lastSearch = { filters, response: res, elapsedMs, ctx, placesCostUSD };
+    window as unknown as {
+      _lastSearch?: {
+        filters: SearchFilters;
+        response: SearchResponse;
+        elapsedMs: number;
+        placesCostUSD: number;
+      };
+    }
+  )._lastSearch = { filters, response: res, elapsedMs, placesCostUSD };
 
   return res;
 }
