@@ -69,7 +69,7 @@ export const handler: Handler = async (event) => {
   if (!location) return jsonRes(400, { error: "Pass ?location=..." });
 
   const queries = [
-    `vacation rentals in ${location}`,
+    `lodging in ${location}`,
     `hotels in ${location}`,
   ];
 
