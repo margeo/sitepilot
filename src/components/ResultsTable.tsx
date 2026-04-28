@@ -3,11 +3,20 @@ import type { BusinessBasic } from "../types";
 interface Props {
   results: BusinessBasic[];
   onSelect: (b: BusinessBasic) => void;
+  onResearch: (b: BusinessBasic) => void;
   selectedId?: string;
   loadingId?: string;
+  researchingId?: string;
 }
 
-export function ResultsTable({ results, onSelect, selectedId, loadingId }: Props) {
+export function ResultsTable({
+  results,
+  onSelect,
+  onResearch,
+  selectedId,
+  loadingId,
+  researchingId,
+}: Props) {
   if (results.length === 0) return null;
 
   return (
@@ -21,7 +30,9 @@ export function ResultsTable({ results, onSelect, selectedId, loadingId }: Props
       </div>
       {results.map((b) => {
         const isSelected = selectedId === b.place_id;
-        const isLoading = loadingId === b.place_id;
+        const isGenerating = loadingId === b.place_id;
+        const isResearching = researchingId === b.place_id;
+        const anyBusy = isGenerating || isResearching;
         return (
           <div
             key={b.place_id}
@@ -50,13 +61,27 @@ export function ResultsTable({ results, onSelect, selectedId, loadingId }: Props
                 <span className="badge green">No</span>
               )}
             </div>
-            <div>
+            <div style={{ display: "flex", gap: 6 }}>
+              <button
+                className="btn btn-sm btn-secondary"
+                disabled={anyBusy}
+                onClick={() => onResearch(b)}
+              >
+                {isResearching ? (
+                  <>
+                    <span className="spinner" />
+                    Researching…
+                  </>
+                ) : (
+                  "Research"
+                )}
+              </button>
               <button
                 className="btn btn-sm"
-                disabled={isLoading}
+                disabled={anyBusy}
                 onClick={() => onSelect(b)}
               >
-                {isLoading ? (
+                {isGenerating ? (
                   <>
                     <span className="spinner" />
                     Building…

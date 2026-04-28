@@ -170,6 +170,67 @@ export function fetchDetails(place_id: string, basic: BusinessBasic): Promise<De
   return post<DetailsResponse>("place-details", { place_id, basic });
 }
 
+export interface ResearchResponse {
+  dossier: unknown;
+  model: string; // API-confirmed served model
+  usage?: { input_tokens?: number; output_tokens?: number };
+  elapsedMs: number;
+}
+
+export async function researchBusiness(
+  business: BusinessBasic | BusinessDetails,
+  researchModelId: DesignModelId,
+): Promise<ResearchResponse> {
+  const t0 = performance.now();
+  console.log("[research] →", { name: business.name, requested: researchModelId });
+  const res = await post<ResearchResponse>("research-business", {
+    business,
+    researchModelId,
+  });
+  const clientElapsedMs = performance.now() - t0;
+  const cost = phaseCostUSD(researchModelId, res.usage?.input_tokens, res.usage?.output_tokens, true);
+  const sources = (res.dossier as { sources?: unknown[] } | null)?.sources?.length ?? 0;
+
+  console.groupCollapsed(
+    `%c[research] DONE — ${business.name} — served_by_api: ${res.model} — ${fmtUSD(cost)} — ${(clientElapsedMs / 1000).toFixed(1)}s`,
+    "color: #5fa; font-weight: bold;",
+  );
+  console.table({
+    "Research model": {
+      requested: researchModelId,
+      served_by_api: res.model,
+      in_tokens: fmtTokens(res.usage?.input_tokens),
+      out_tokens: fmtTokens(res.usage?.output_tokens),
+      cost_USD: fmtUSD(cost),
+      server_elapsed_s: (res.elapsedMs / 1000).toFixed(1),
+      total_elapsed_s: (clientElapsedMs / 1000).toFixed(1),
+    },
+  });
+  console.log(`Dossier sources: ${sources}`);
+  console.log("Dossier:", res.dossier);
+  console.groupEnd();
+
+  (
+    window as unknown as {
+      _lastResearch?: {
+        business: BusinessBasic | BusinessDetails;
+        requestedModel: DesignModelId;
+        response: ResearchResponse;
+        clientElapsedMs: number;
+        cost: number;
+      };
+    }
+  )._lastResearch = {
+    business,
+    requestedModel: researchModelId,
+    response: res,
+    clientElapsedMs,
+    cost,
+  };
+
+  return res;
+}
+
 export interface StartGenerateResponse {
   jobId: string;
   status: "pending";

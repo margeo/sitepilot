@@ -4,7 +4,7 @@ import { SearchForm } from "./components/SearchForm";
 import { ResultsTable } from "./components/ResultsTable";
 import { SitePreview } from "./components/SitePreview";
 import { ScreenshotImport } from "./components/ScreenshotImport";
-import { fetchDetails, generateSite, searchBusinesses } from "./lib/api";
+import { fetchDetails, generateSite, researchBusiness, searchBusinesses } from "./lib/api";
 import type {
   BusinessBasic,
   BusinessDetails,
@@ -63,6 +63,7 @@ export default function App() {
 
   const [selectedId, setSelectedId] = useState<string | undefined>();
   const [busyId, setBusyId] = useState<string | undefined>();
+  const [researchingId, setResearchingId] = useState<string | undefined>();
   const [generationStatus, setGenerationStatus] = useState<JobStatus | null>(null);
   const [generationElapsed, setGenerationElapsed] = useState<number>(0);
   const [selectedDetails, setSelectedDetails] = useState<BusinessDetails | null>(null);
@@ -100,6 +101,24 @@ export default function App() {
       setResults([]);
     } finally {
       setSearching(false);
+    }
+  }
+
+  async function runResearch(b: BusinessBasic) {
+    if (!researchModel) {
+      setError("Pick a research model from the sidebar before researching.");
+      return;
+    }
+    setResearchingId(b.place_id);
+    setError(null);
+    try {
+      // Enrich with place-details first so research has reviews / hours / etc.
+      const { business } = await fetchDetails(b.place_id, b);
+      await researchBusiness(business, researchModel);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : String(e));
+    } finally {
+      setResearchingId(undefined);
     }
   }
 
@@ -299,8 +318,10 @@ export default function App() {
           <ResultsTable
             results={results}
             onSelect={buildSite}
+            onResearch={runResearch}
             selectedId={selectedId}
             loadingId={busyId}
+            researchingId={researchingId}
           />
         </div>
 
