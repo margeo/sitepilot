@@ -44,7 +44,6 @@ const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
       "eateries",
       "fine dining",
       "family restaurants",
-      "bakeries",
       "fast food",
       "pizzerias",
       "gyros and souvlaki",
@@ -60,8 +59,20 @@ const SECTOR_CONFIG: Record<Sector, SectorConfig> = {
       "breakfast_restaurant",
       "brunch_restaurant",
       "sandwich_shop",
-      "bakery",
     ],
+  },
+  bakeries: {
+    queries: [
+      "bakeries",
+      "patisseries",
+      "bread shops",
+      "pastry shops",
+      "Greek bakeries",
+      "traditional bakeries",
+      "artisan bakeries",
+      "cake shops",
+    ],
+    includedTypes: ["bakery"],
   },
   cafes_bars_pubs: {
     queries: [

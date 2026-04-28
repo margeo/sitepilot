@@ -1,6 +1,7 @@
 export type Sector =
   | "restaurants_tavernas"
   | "cafes_bars_pubs"
+  | "bakeries"
   | "accommodations"
   | "boutique"
   | "car_rental"
@@ -58,6 +59,21 @@ export const SECTOR_THEMES: Record<Sector, SectorTheme> = {
       "pub", "beach bar", "sunset", "drinks", "aperitivo",
     ],
     suggestedPages: ["Home", "Drinks", "Gallery", "Visit & Contact"],
+    hasMenu: true, hasRooms: false, hasGallery: true,
+  },
+  bakeries: {
+    label: "Bakeries & Patisseries",
+    primary: "#7a4a23", primaryDark: "#4a2c14", accent: "#d9a55c",
+    bgTint: "#fbf3e7", heroOverlay: "rgba(60,30,10,0.45)",
+    servicesLabel: "Today's Bakes", servicesSingular: "item",
+    tagline: "Fresh from the oven, every morning.",
+    aboutHeading: "Our craft",
+    ctaReserve: "Order ahead",
+    keywords: [
+      "bakery", "patisserie", "bread", "pastry", "cake", "artisan bakery",
+      "traditional bakery", "Greek bakery", "fresh bread", "homemade",
+    ],
+    suggestedPages: ["Home", "Bakes", "Gallery", "Visit & Contact"],
     hasMenu: true, hasRooms: false, hasGallery: true,
   },
   accommodations: {
@@ -152,6 +168,7 @@ export function sectorFromGoogleTypes(types: string[] | undefined, hint?: Sector
     return "cafes_bars_pubs";
   }
   if (t.includes("cafe") || t.includes("coffee_shop")) return "cafes_bars_pubs";
+  if (t.includes("bakery")) return "bakeries";
   if (t.includes("car_rental")) return "car_rental";
   if (t.includes("beauty_salon") || t.includes("hair_care") || t.includes("spa")) return "beauty_wellness";
   if (t.includes("clothing_store") || t.includes("shoe_store") || t.includes("jewelry_store")) return "boutique";
