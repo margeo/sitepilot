@@ -1,5 +1,12 @@
 import { useEffect, useState } from "react";
 import { buildDesignPrompt, extractHtmlFromPaste } from "../lib/api";
+import {
+  AESTHETICS,
+  PALETTES,
+  TYPOGRAPHY,
+  pickRandom,
+  resolveDescription,
+} from "../design-presets";
 import type { BusinessDetails, GeneratedSite } from "../types";
 
 // The three flat-rate web subscriptions we support routing the design call
@@ -72,13 +79,50 @@ interface Props {
   dossier: unknown;
   onSave: (site: GeneratedSite) => void;
   onClose: () => void;
+  // Section-3 selections — empty / "random" / specific slug. Resolved at
+  // mount and again on each prompt re-fetch so the operator can change
+  // sidebar selections without closing the panel.
+  aestheticSlug?: string;
+  paletteSlug?: string;
+  typographySlug?: string;
 }
 
 // Manual-design workflow: copy the same prompt the API would have used →
 // paste into claude.ai → paste the response back here → app saves it as
 // the row's generated site, indistinguishable from an API run except for
 // generated_by="manual".
-export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Props) {
+export function ManualGeneratePanel({
+  business,
+  dossier,
+  onSave,
+  onClose,
+  aestheticSlug,
+  paletteSlug,
+  typographySlug,
+}: Props) {
+  // Resolve "random" -> concrete slug once per panel mount. Specific
+  // selections pass through unchanged. Empty stays empty (= "Let AI
+  // decide" — slot is omitted from the prompt block).
+  function resolveSlot(slug: string | undefined, list: typeof AESTHETICS): string {
+    if (!slug) return "";
+    if (slug === "random") return pickRandom(list).slug;
+    return slug;
+  }
+  const resolvedAesthetic = resolveSlot(aestheticSlug, AESTHETICS);
+  const resolvedPalette = resolveSlot(paletteSlug, PALETTES);
+  const resolvedTypography = resolveSlot(typographySlug, TYPOGRAPHY);
+  const overrides = {
+    aesthetic: resolveDescription(resolvedAesthetic, AESTHETICS),
+    palette: resolveDescription(resolvedPalette, PALETTES),
+    typography: resolveDescription(resolvedTypography, TYPOGRAPHY),
+  };
+  const overrideLabels = {
+    aesthetic: AESTHETICS.find((a) => a.slug === resolvedAesthetic)?.label,
+    palette: PALETTES.find((p) => p.slug === resolvedPalette)?.label,
+    typography: TYPOGRAPHY.find((t) => t.slug === resolvedTypography)?.label,
+  };
+  const anyOverride =
+    overrides.aesthetic || overrides.palette || overrides.typography;
   const [prompt, setPrompt] = useState<string | null>(null);
   const [pastedText, setPastedText] = useState("");
   const [chatUrl, setChatUrl] = useState("");
@@ -93,11 +137,13 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
 
   // Fetch the prompt once on mount. Cheap (text only, no AI), but cache it
   // in component state so toggling the panel open/closed doesn't refetch.
+  // Re-fetches when any override slug changes so the operator can pick a
+  // different aesthetic / palette / typography without closing the panel.
   useEffect(() => {
     let cancelled = false;
     setLoadingPrompt(true);
     setPromptError(null);
-    buildDesignPrompt(business, dossier)
+    buildDesignPrompt(business, dossier, overrides)
       .then((res) => {
         if (cancelled) return;
         setPrompt(res.prompt);
@@ -113,7 +159,8 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
     return () => {
       cancelled = true;
     };
-  }, [business, dossier]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [business, dossier, resolvedAesthetic, resolvedPalette, resolvedTypography]);
 
   async function copyAndOpen(target: ProviderId) {
     if (!prompt) return;
@@ -275,6 +322,41 @@ export function ManualGeneratePanel({ business, dossier, onSave, onClose }: Prop
       >
         Manual generation · web subscription (free)
       </div>
+
+      {anyOverride && (
+        <div
+          style={{
+            fontSize: 11,
+            color: "var(--text-muted)",
+            marginBottom: 12,
+            background: "var(--bg-card)",
+            border: "1px solid var(--border)",
+            borderRadius: "var(--radius-sm)",
+            padding: "8px 10px",
+            lineHeight: 1.5,
+          }}
+        >
+          <strong style={{ color: "var(--text)" }}>Locked overrides:</strong>{" "}
+          {overrideLabels.aesthetic && (
+            <span>
+              <span style={{ color: "var(--text-muted)" }}>Aesthetic </span>
+              <span style={{ color: "var(--accent)" }}>{overrideLabels.aesthetic}</span>{" "}
+            </span>
+          )}
+          {overrideLabels.palette && (
+            <span>
+              <span style={{ color: "var(--text-muted)" }}>· Palette </span>
+              <span style={{ color: "var(--accent)" }}>{overrideLabels.palette}</span>{" "}
+            </span>
+          )}
+          {overrideLabels.typography && (
+            <span>
+              <span style={{ color: "var(--text-muted)" }}>· Typography </span>
+              <span style={{ color: "var(--accent)" }}>{overrideLabels.typography}</span>
+            </span>
+          )}
+        </div>
+      )}
 
       {loadingPrompt && (
         <div style={{ color: "var(--text-muted)" }}>

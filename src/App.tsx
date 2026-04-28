@@ -23,6 +23,13 @@ import type {
 
 const LS_MODEL_KEY = "sitepilot.designModel.v1";
 const LS_RESEARCH_MODEL_KEY = "sitepilot.researchModel.v1";
+// Section 3 design-direction selectors. Each holds a slug from
+// design-presets.ts; "" or undefined = "Let AI decide" (omitted from
+// prompt). The literal "random" sentinel = pick a random slug at
+// generation time.
+const LS_AESTHETIC_KEY = "sitepilot.aesthetic.v1";
+const LS_PALETTE_KEY = "sitepilot.palette.v1";
+const LS_TYPOGRAPHY_KEY = "sitepilot.typography.v1";
 
 // No default — user must explicitly pick both models before Generate is enabled.
 // If a previous selection is in localStorage we surface it (convenience), but
@@ -70,6 +77,38 @@ export default function App() {
       if (id) window.localStorage.setItem(LS_RESEARCH_MODEL_KEY, id);
       else window.localStorage.removeItem(LS_RESEARCH_MODEL_KEY);
     } catch {}
+  }
+
+  function loadString(key: string): string {
+    try {
+      return window.localStorage.getItem(key) ?? "";
+    } catch {
+      return "";
+    }
+  }
+  function persistString(key: string, value: string) {
+    try {
+      if (value) window.localStorage.setItem(key, value);
+      else window.localStorage.removeItem(key);
+    } catch {}
+  }
+
+  const [aestheticSlug, setAestheticSlugState] = useState<string>(() => loadString(LS_AESTHETIC_KEY));
+  const [paletteSlug, setPaletteSlugState] = useState<string>(() => loadString(LS_PALETTE_KEY));
+  const [typographySlug, setTypographySlugState] = useState<string>(() =>
+    loadString(LS_TYPOGRAPHY_KEY),
+  );
+  function setAestheticSlug(v: string) {
+    setAestheticSlugState(v);
+    persistString(LS_AESTHETIC_KEY, v);
+  }
+  function setPaletteSlug(v: string) {
+    setPaletteSlugState(v);
+    persistString(LS_PALETTE_KEY, v);
+  }
+  function setTypographySlug(v: string) {
+    setTypographySlugState(v);
+    persistString(LS_TYPOGRAPHY_KEY, v);
   }
 
   const [selectedId, setSelectedId] = useState<string | undefined>();
@@ -503,6 +542,12 @@ export default function App() {
           onDesignModelChange={setDesignModel}
           researchModel={researchModel}
           onResearchModelChange={setResearchModel}
+          aestheticSlug={aestheticSlug}
+          onAestheticChange={setAestheticSlug}
+          paletteSlug={paletteSlug}
+          onPaletteChange={setPaletteSlug}
+          typographySlug={typographySlug}
+          onTypographyChange={setTypographySlug}
         />
 
         {demoMode === false && (
@@ -781,6 +826,9 @@ export default function App() {
             siteByPlaceId={siteByPlaceId}
             businessByPlaceId={businessByPlaceId}
             onManualSiteSave={saveManualSite}
+            aestheticSlug={aestheticSlug}
+            paletteSlug={paletteSlug}
+            typographySlug={typographySlug}
           />
         </div>
       </main>

@@ -7,6 +7,7 @@ import {
   type SearchFilters,
   type Sector,
 } from "../types";
+import { AESTHETICS, PALETTES, TYPOGRAPHY, pickRandom } from "../design-presets";
 import { autocompleteLocation, type LocationSuggestion } from "../lib/api";
 
 interface Props {
@@ -17,6 +18,15 @@ interface Props {
   onDesignModelChange: (id: DesignModelId | undefined) => void;
   researchModel: DesignModelId | undefined;
   onResearchModelChange: (id: DesignModelId | undefined) => void;
+  // Section-3 design overrides — slugs from src/design-presets.ts.
+  // Empty string = "Let AI decide" (omitted from prompt).
+  // "random" = pick a random concrete slug at generation time.
+  aestheticSlug: string;
+  onAestheticChange: (slug: string) => void;
+  paletteSlug: string;
+  onPaletteChange: (slug: string) => void;
+  typographySlug: string;
+  onTypographyChange: (slug: string) => void;
 }
 
 function validateLocation(loc: string): { ok: boolean; hint?: string } {
@@ -34,6 +44,12 @@ export function SearchForm({
   onDesignModelChange,
   researchModel,
   onResearchModelChange,
+  aestheticSlug,
+  onAestheticChange,
+  paletteSlug,
+  onPaletteChange,
+  typographySlug,
+  onTypographyChange,
 }: Props) {
   const designModelHint = designModel
     ? DESIGN_MODELS.find((m) => m.value === designModel)?.hint
@@ -371,6 +387,108 @@ export function SearchForm({
             {designModelHint}
           </div>
         )}
+
+        <div
+          style={{
+            marginTop: 14,
+            paddingTop: 14,
+            borderTop: "1px dashed var(--border)",
+          }}
+        >
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--text-muted)",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              marginBottom: 8,
+              display: "flex",
+              alignItems: "center",
+              gap: 8,
+              flexWrap: "wrap",
+            }}
+          >
+            <span>Design overrides (optional)</span>
+            <button
+              type="button"
+              className="btn btn-sm btn-secondary"
+              style={{ padding: "2px 10px", fontSize: 11 }}
+              onClick={() => {
+                onAestheticChange(pickRandom(AESTHETICS).slug);
+                onPaletteChange(pickRandom(PALETTES).slug);
+                onTypographyChange(pickRandom(TYPOGRAPHY).slug);
+              }}
+              title="Pick a fresh random aesthetic / palette / typography combo"
+            >
+              🎲 Roll all
+            </button>
+          </div>
+
+          <label htmlFor="aestheticSlug">Aesthetic direction</label>
+          <select
+            id="aestheticSlug"
+            value={aestheticSlug}
+            onChange={(e) => onAestheticChange(e.target.value)}
+            style={{ width: "100%" }}
+          >
+            <option value="">— Let AI decide —</option>
+            <option value="random">— Random (pick on each click) —</option>
+            {AESTHETICS.map((a) => (
+              <option key={a.slug} value={a.slug}>
+                {a.label}
+              </option>
+            ))}
+          </select>
+
+          <label htmlFor="paletteSlug" style={{ marginTop: 10 }}>
+            Color palette
+          </label>
+          <select
+            id="paletteSlug"
+            value={paletteSlug}
+            onChange={(e) => onPaletteChange(e.target.value)}
+            style={{ width: "100%" }}
+          >
+            <option value="">— Let AI decide —</option>
+            <option value="random">— Random (pick on each click) —</option>
+            {PALETTES.map((p) => (
+              <option key={p.slug} value={p.slug}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+
+          <label htmlFor="typographySlug" style={{ marginTop: 10 }}>
+            Typography pair
+          </label>
+          <select
+            id="typographySlug"
+            value={typographySlug}
+            onChange={(e) => onTypographyChange(e.target.value)}
+            style={{ width: "100%" }}
+          >
+            <option value="">— Let AI decide —</option>
+            <option value="random">— Random (pick on each click) —</option>
+            {TYPOGRAPHY.map((t) => (
+              <option key={t.slug} value={t.slug}>
+                {t.label}
+              </option>
+            ))}
+          </select>
+
+          <div
+            style={{
+              fontSize: 11,
+              color: "var(--text-muted)",
+              marginTop: 6,
+              lineHeight: 1.45,
+            }}
+          >
+            Empty = the model picks freely. Specific = locked. Random = a fresh
+            value is rolled at each generation. Selections are appended to the
+            system prompt as a DESIGN OVERRIDES block.
+          </div>
+        </div>
       </div>
     </form>
   );

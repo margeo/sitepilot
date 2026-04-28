@@ -402,14 +402,22 @@ export interface BuildDesignPromptResponse {
   estimatedTokens: number;
 }
 
+export interface DesignOverrides {
+  aesthetic?: string; // description text from src/design-presets.ts
+  palette?: string;
+  typography?: string;
+}
+
 export function buildDesignPrompt(
   business: BusinessDetails,
   dossier: unknown,
+  overrides?: DesignOverrides,
 ): Promise<BuildDesignPromptResponse> {
   return post<BuildDesignPromptResponse>("build-design-prompt", {
     business,
     dossier,
     origin: typeof window !== "undefined" ? window.location.origin : undefined,
+    overrides,
   });
 }
 

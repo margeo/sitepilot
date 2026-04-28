@@ -32,6 +32,14 @@ interface Body {
   // origin we'd emit relative paths that only work inside the SitePilot
   // tab's iframe.
   origin?: string;
+  // Per-row design overrides chosen in section 3 of the sidebar. Each
+  // field, when present, is a paragraph of design directives that gets
+  // appended to the system prompt as a DESIGN OVERRIDES block.
+  overrides?: {
+    aesthetic?: string;
+    palette?: string;
+    typography?: string;
+  };
 }
 
 function jsonRes(statusCode: number, body: unknown) {
@@ -67,7 +75,23 @@ export const handler: Handler = async (event) => {
   };
 
   const userPrompt = buildDesignerUserPrompt({ business: businessForPrompt, dossier: body.dossier });
-  const combined = `${DESIGNER_SYSTEM_FULL}\n\n---\n\n${userPrompt}`;
+
+  // Build the optional DESIGN OVERRIDES block — operator-locked
+  // aesthetic / palette / typography. Lives at the very end of the
+  // system prompt so directives carry maximum weight (override default
+  // tendencies). Only populated for fields the operator actually set.
+  const o = body.overrides ?? {};
+  const overrideLines: string[] = [];
+  if (o.aesthetic) overrideLines.push(`- Aesthetic: ${o.aesthetic}`);
+  if (o.palette) overrideLines.push(`- Palette: ${o.palette}`);
+  if (o.typography) overrideLines.push(`- Typography: ${o.typography}`);
+  const overrideBlock =
+    overrideLines.length > 0
+      ? `\n\n## DESIGN OVERRIDES (mandatory for this generation)\n` +
+        `Override your default tendency. Apply these specific directions:\n${overrideLines.join("\n")}`
+      : "";
+
+  const combined = `${DESIGNER_SYSTEM_FULL}${overrideBlock}\n\n---\n\n${userPrompt}`;
   const finalPrompt = body.origin
     ? combined.replace(
         /\/\.netlify\/functions\/photos/g,

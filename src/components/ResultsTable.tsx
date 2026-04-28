@@ -24,6 +24,12 @@ interface Props {
   businessByPlaceId?: ReadonlyMap<string, BusinessDetails>;
   // Save handler for the manual (claude.ai web) generation path.
   onManualSiteSave?: (placeId: string, site: GeneratedSite) => void;
+  // Section-3 design overrides — slugs from src/design-presets.ts —
+  // forwarded to ManualGeneratePanel so each generation can lock in a
+  // specific aesthetic / palette / typography.
+  aestheticSlug?: string;
+  paletteSlug?: string;
+  typographySlug?: string;
 }
 
 // Loose shape of the dossier returned by /research-business. Mirrors the
@@ -639,6 +645,9 @@ export function ResultsTable({
   siteByPlaceId,
   businessByPlaceId,
   onManualSiteSave,
+  aestheticSlug,
+  paletteSlug,
+  typographySlug,
 }: Props) {
   // Place_ids whose dossier panel the user has manually closed. The dossier
   // itself stays cached in researchedIds (so Generate site still works);
@@ -952,6 +961,9 @@ export function ResultsTable({
                 <ManualGeneratePanel
                   business={cachedBusiness}
                   dossier={dossier}
+                  aestheticSlug={aestheticSlug}
+                  paletteSlug={paletteSlug}
+                  typographySlug={typographySlug}
                   onSave={(site) => {
                     onManualSiteSave(b.place_id, site);
                     setManualOpenIds((prev) => {
