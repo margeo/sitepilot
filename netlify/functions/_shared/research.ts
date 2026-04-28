@@ -8,6 +8,7 @@
 // Default (no researchModelId passed) uses Gemini 2.5 Flash direct + google_search.
 
 import Anthropic from "@anthropic-ai/sdk";
+import { jsonrepair } from "jsonrepair";
 import type { Dossier } from "./dossier";
 import { callGemini, hasGemini } from "./gemini";
 
@@ -100,48 +101,52 @@ function extractJson(text: string): string | null {
   return obj ? obj[0] : null;
 }
 
-// Try to parse JSON with tolerance for common LLM glitches:
-// - raw newlines / tabs inside string values (must be escaped per JSON spec)
-// - trailing commas before } or ]
-// - leading/trailing whitespace
-// Returns the parsed object or throws the best available error.
+// Try to parse JSON with three layers of tolerance:
+// 1. Plain JSON.parse (works when the model output clean JSON)
+// 2. Manual cleanup: trailing commas + raw newlines/tabs inside strings
+// 3. jsonrepair library: handles unescaped inner quotes, missing commas,
+//    truncated output, comments, single-quoted strings, and other common
+//    LLM JSON glitches that step 2 doesn't catch.
 function parseTolerantJson<T>(raw: string): T {
   try {
     return JSON.parse(raw) as T;
   } catch {
-    // Clean up common issues and retry.
-    let s = raw.trim();
-    // Remove trailing commas before } or ]
-    s = s.replace(/,(\s*[}\]])/g, "$1");
-    // Escape literal newlines/tabs/CRs inside double-quoted string values.
-    // Walk the string and track whether we're inside a string literal.
-    let out = "";
-    let inStr = false;
-    let escaped = false;
-    for (let i = 0; i < s.length; i++) {
-      const ch = s[i];
-      if (escaped) {
+    // Layer 2: manual cleanup
+    try {
+      let s = raw.trim();
+      s = s.replace(/,(\s*[}\]])/g, "$1");
+      let out = "";
+      let inStr = false;
+      let escaped = false;
+      for (let i = 0; i < s.length; i++) {
+        const ch = s[i];
+        if (escaped) {
+          out += ch;
+          escaped = false;
+          continue;
+        }
+        if (ch === "\\") {
+          out += ch;
+          escaped = true;
+          continue;
+        }
+        if (ch === '"') {
+          inStr = !inStr;
+          out += ch;
+          continue;
+        }
+        if (inStr && (ch === "\n" || ch === "\r" || ch === "\t")) {
+          out += ch === "\n" ? "\\n" : ch === "\r" ? "\\r" : "\\t";
+          continue;
+        }
         out += ch;
-        escaped = false;
-        continue;
       }
-      if (ch === "\\") {
-        out += ch;
-        escaped = true;
-        continue;
-      }
-      if (ch === '"') {
-        inStr = !inStr;
-        out += ch;
-        continue;
-      }
-      if (inStr && (ch === "\n" || ch === "\r" || ch === "\t")) {
-        out += ch === "\n" ? "\\n" : ch === "\r" ? "\\r" : "\\t";
-        continue;
-      }
-      out += ch;
+      return JSON.parse(out) as T;
+    } catch {
+      // Layer 3: jsonrepair — most tolerant fallback
+      const repaired = jsonrepair(raw);
+      return JSON.parse(repaired) as T;
     }
-    return JSON.parse(out) as T;
   }
 }
 
