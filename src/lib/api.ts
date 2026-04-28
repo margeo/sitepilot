@@ -1,11 +1,30 @@
-import type {
-  BusinessBasic,
-  BusinessDetails,
-  DesignModelId,
-  GeneratedSite,
-  JobRecord,
-  SearchFilters,
+import {
+  MODEL_RATES,
+  type BusinessBasic,
+  type BusinessDetails,
+  type DesignModelId,
+  type GeneratedSite,
+  type JobRecord,
+  type SearchFilters,
 } from "../types";
+
+function fmtUSD(n: number): string {
+  return "$" + n.toFixed(4);
+}
+
+function fmtTokens(n: number | undefined): string {
+  if (n === undefined) return "—";
+  return n.toLocaleString("en-US");
+}
+
+// Compute per-phase cost (tokens × rate + per-call search surcharge).
+function phaseCostUSD(modelId: DesignModelId | undefined, inTok = 0, outTok = 0, isResearch = false): number {
+  if (!modelId) return 0;
+  const rates = MODEL_RATES[modelId];
+  if (!rates) return 0;
+  const tokenCost = (inTok * rates.inPer1M + outTok * rates.outPer1M) / 1_000_000;
+  return tokenCost + (isResearch ? rates.researchSearchUSD : 0);
+}
 
 const BASE = "/.netlify/functions";
 
@@ -105,15 +124,45 @@ export async function generateSite(
       if (record.status === "done") {
         const r = record.usage?.research;
         const d = record.usage?.design;
-        const total =
+        const researchCost = phaseCostUSD(record.researchModelId, r?.input_tokens, r?.output_tokens, true);
+        const designCost = phaseCostUSD(record.modelId, d?.input_tokens, d?.output_tokens, false);
+        const totalCost = researchCost + designCost;
+        const totalTokens =
           (r?.input_tokens ?? 0) + (r?.output_tokens ?? 0) +
           (d?.input_tokens ?? 0) + (d?.output_tokens ?? 0);
-        console.log("[generate] tokens", {
-          research: r ? `${r.input_tokens ?? 0} in / ${r.output_tokens ?? 0} out` : "n/a",
-          design: d ? `${d.input_tokens ?? 0} in / ${d.output_tokens ?? 0} out` : "n/a",
-          total,
-          elapsedMs: record.elapsedMs,
+
+        console.groupCollapsed(
+          `%c[generate] DONE — ${record.businessName} — ${fmtUSD(totalCost)} total — ${Math.round((record.elapsedMs?.total ?? 0) / 1000)}s`,
+          "color: #5fa; font-weight: bold;",
+        );
+        console.table({
+          "Research model": {
+            model: record.researchModelId ?? "(none)",
+            in_tokens: fmtTokens(r?.input_tokens),
+            out_tokens: fmtTokens(r?.output_tokens),
+            cost_USD: fmtUSD(researchCost),
+            elapsed_s: ((record.elapsedMs?.research ?? 0) / 1000).toFixed(1),
+          },
+          "Design model": {
+            model: record.modelId ?? "(none)",
+            in_tokens: fmtTokens(d?.input_tokens),
+            out_tokens: fmtTokens(d?.output_tokens),
+            cost_USD: fmtUSD(designCost),
+            elapsed_s: ((record.elapsedMs?.design ?? 0) / 1000).toFixed(1),
+          },
+          TOTAL: {
+            model: "—",
+            in_tokens: "—",
+            out_tokens: "—",
+            cost_USD: fmtUSD(totalCost),
+            elapsed_s: ((record.elapsedMs?.total ?? 0) / 1000).toFixed(1),
+          },
         });
+        console.log("Total tokens (in+out):", totalTokens.toLocaleString("en-US"));
+        console.log("Raw record:", record);
+        console.groupEnd();
+        // Also save to window for ad-hoc inspection later
+        (window as unknown as { _lastGenerate?: JobRecord })._lastGenerate = record;
       }
       return { jobId, record };
     }

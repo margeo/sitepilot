@@ -191,6 +191,21 @@ export const RESEARCH_MODELS: DesignModelOption[] = [
   },
 ];
 
+// Per-1M-token rates + per-call surcharges (USD). Used for cost estimation
+// in F12 logging. Verified from OpenRouter / Anthropic public pricing 2026-04-28.
+// inSearch: Exa for OpenRouter :online (research only); web_search for
+// Anthropic-direct (research only). Design phase has no search overhead.
+export const MODEL_RATES: Record<DesignModelId, { inPer1M: number; outPer1M: number; researchSearchUSD: number }> = {
+  "openrouter:google/gemini-3.1-flash-lite-preview": { inPer1M: 0.25, outPer1M: 1.50, researchSearchUSD: 0.005 },
+  "openrouter:google/gemini-3.1-pro-preview":         { inPer1M: 2.00, outPer1M: 12.00, researchSearchUSD: 0.005 },
+  "openrouter:anthropic/claude-haiku-4.5":            { inPer1M: 1.00, outPer1M: 5.00,  researchSearchUSD: 0.005 },
+  "openrouter:anthropic/claude-sonnet-4.6":           { inPer1M: 3.00, outPer1M: 15.00, researchSearchUSD: 0.005 },
+  "openrouter:anthropic/claude-opus-4.7":             { inPer1M: 5.00, outPer1M: 25.00, researchSearchUSD: 0.005 },
+  "anthropic:claude-haiku-4-5":                       { inPer1M: 1.00, outPer1M: 5.00,  researchSearchUSD: 0.03 },
+  "anthropic:claude-sonnet-4-6":                      { inPer1M: 3.00, outPer1M: 15.00, researchSearchUSD: 0.03 },
+  "anthropic:claude-opus-4-7":                        { inPer1M: 5.00, outPer1M: 25.00, researchSearchUSD: 0.03 },
+};
+
 export type JobStatus = "pending" | "researching" | "designing" | "done" | "error";
 
 export interface JobRecord {
