@@ -1,5 +1,6 @@
 import { useState, type ReactNode } from "react";
 import type { BusinessBasic, BusinessDetails, GeneratedSite } from "../types";
+import { photoUrl } from "../lib/api";
 import { SitePreview } from "./SitePreview";
 import { ManualGeneratePanel } from "./ManualGeneratePanel";
 
@@ -52,11 +53,9 @@ interface DossierShape {
 
 function DossierPanel({
   dossier,
-  business,
   onClose,
 }: {
   dossier: DossierShape;
-  business?: BusinessDetails;
   onClose: () => void;
 }) {
   const bi = dossier.brand_identity ?? {};
@@ -241,37 +240,20 @@ function DossierPanel({
           })}
         </div>
       )}
-
-      {business && (
-        <div
-          style={{
-            marginTop: 16,
-            paddingTop: 14,
-            borderTop: "1px dashed var(--border)",
-          }}
-        >
-          <div
-            style={{
-              color: "var(--accent)",
-              fontWeight: 700,
-              fontSize: 11,
-              textTransform: "uppercase",
-              letterSpacing: "0.06em",
-              marginBottom: 10,
-            }}
-          >
-            Google Places data
-          </div>
-          <BusinessFacts business={business} />
-        </div>
-      )}
     </div>
   );
 }
 
-function BusinessFacts({ business: b }: { business: BusinessDetails }) {
+function BusinessPanel({
+  business: b,
+  onClose,
+}: {
+  business: BusinessDetails;
+  onClose: () => void;
+}) {
   const phonesAll = [...(b.phones?.mobiles ?? []), ...(b.phones?.landlines ?? [])];
-  const reviewsTop = (b.reviews ?? []).slice(0, 3);
+  const reviews = b.reviews ?? [];
+  const photoRefs = b.photo_refs ?? [];
   const Row = ({
     label,
     children,
@@ -279,13 +261,72 @@ function BusinessFacts({ business: b }: { business: BusinessDetails }) {
     label: string;
     children: ReactNode;
   }) => (
-    <div style={{ display: "grid", gridTemplateColumns: "120px 1fr", gap: 10, marginBottom: 6 }}>
+    <div
+      style={{
+        display: "grid",
+        gridTemplateColumns: "130px 1fr",
+        gap: 10,
+        marginBottom: 6,
+      }}
+    >
       <span style={{ color: "var(--text-muted)" }}>{label}</span>
       <span>{children}</span>
     </div>
   );
+
   return (
-    <div>
+    <div
+      style={{
+        background: "var(--bg-elev)",
+        borderBottom: "1px solid var(--border)",
+        padding: "14px 18px 18px 18px",
+        fontSize: 12.5,
+        lineHeight: 1.55,
+        color: "var(--text)",
+        position: "relative",
+      }}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close business panel"
+        title="Close"
+        style={{
+          position: "absolute",
+          top: 6,
+          right: 8,
+          width: 26,
+          height: 26,
+          padding: 0,
+          background: "transparent",
+          border: "1px solid var(--border)",
+          borderRadius: 6,
+          color: "var(--text-muted)",
+          cursor: "pointer",
+          fontSize: 14,
+          lineHeight: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        ✕
+      </button>
+
+      <div
+        style={{
+          color: "var(--accent)",
+          fontWeight: 700,
+          fontSize: 11,
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          marginBottom: 12,
+          paddingRight: 32,
+        }}
+      >
+        ✓ Business · Google Places
+      </div>
+
       <Row label="Lead score">
         {b.lead_score}/10
         {b.lead_score_reasons && b.lead_score_reasons.length > 0 && (
@@ -297,24 +338,51 @@ function BusinessFacts({ business: b }: { business: BusinessDetails }) {
         <span style={{ color: "var(--text-muted)" }}> · {b.user_ratings_total ?? 0} reviews</span>
       </Row>
       <Row label="Mobiles">
-        {b.phones?.mobiles?.length ? b.phones.mobiles.join(", ") : <em style={{ color: "var(--text-muted)" }}>—</em>}
+        {b.phones?.mobiles?.length ? (
+          b.phones.mobiles.map((n, i) => (
+            <span key={i}>
+              <a
+                href={`tel:${n.replace(/\s+/g, "")}`}
+                style={{ color: "var(--accent)", textDecoration: "none" }}
+              >
+                {n}
+              </a>
+              {i < (b.phones?.mobiles?.length ?? 0) - 1 && ", "}
+            </span>
+          ))
+        ) : (
+          <em style={{ color: "var(--text-muted)" }}>—</em>
+        )}
       </Row>
       <Row label="Landlines">
-        {b.phones?.landlines?.length ? b.phones.landlines.join(", ") : <em style={{ color: "var(--text-muted)" }}>—</em>}
+        {b.phones?.landlines?.length ? (
+          b.phones.landlines.map((n, i) => (
+            <span key={i}>
+              <a
+                href={`tel:${n.replace(/\s+/g, "")}`}
+                style={{ color: "var(--accent)", textDecoration: "none" }}
+              >
+                {n}
+              </a>
+              {i < (b.phones?.landlines?.length ?? 0) - 1 && ", "}
+            </span>
+          ))
+        ) : (
+          <em style={{ color: "var(--text-muted)" }}>—</em>
+        )}
       </Row>
       {phonesAll.length === 0 && (
         <Row label="">
           <span style={{ color: "var(--warn)", fontSize: 11 }}>
-            No phone numbers from Google — site CTAs will fall back to map link only.
+            No phone numbers from Google — site CTAs fall back to map link only.
           </span>
         </Row>
       )}
-      <Row label="Photos">{b.photo_refs?.length ?? 0}</Row>
       {b.opening_hours && b.opening_hours.length > 0 && (
         <Row label="Hours">
-          <ul style={{ margin: 0, paddingLeft: 16 }}>
+          <ul style={{ margin: 0, paddingLeft: 0, listStyle: "none" }}>
             {b.opening_hours.map((line, i) => (
-              <li key={i} style={{ listStyle: "none" }}>{line}</li>
+              <li key={i}>{line}</li>
             ))}
           </ul>
         </Row>
@@ -333,26 +401,97 @@ function BusinessFacts({ business: b }: { business: BusinessDetails }) {
             rel="noopener noreferrer"
             style={{ color: "var(--accent)", textDecoration: "none" }}
           >
-            open in Google Maps
+            open in Google Maps ↗
           </a>
         </Row>
       )}
       <Row label="Place ID">
         <code style={{ fontSize: 11, color: "var(--text-muted)" }}>{b.place_id}</code>
       </Row>
-      {reviewsTop.length > 0 && (
-        <div style={{ marginTop: 10 }}>
-          <div style={{ color: "var(--text-muted)", marginBottom: 4 }}>Top reviews:</div>
-          {reviewsTop.map((r, i) => (
-            <div key={i} style={{ marginBottom: 4 }}>
-              <strong style={{ fontSize: 12 }}>{r.author ?? "Guest"}</strong>
-              {typeof r.rating === "number" && (
-                <span style={{ color: "var(--text-muted)" }}> · ★ {r.rating}</span>
-              )}
-              {r.relative_time && (
-                <span style={{ color: "var(--text-muted)" }}> · {r.relative_time}</span>
-              )}
-              <div style={{ fontStyle: "italic" }}>{r.text}</div>
+
+      {photoRefs.length > 0 && (
+        <div style={{ marginTop: 14 }}>
+          <div
+            style={{
+              color: "var(--text-muted)",
+              marginBottom: 8,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              fontSize: 10,
+              fontWeight: 600,
+            }}
+          >
+            Photos · {photoRefs.length}
+          </div>
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(auto-fill, minmax(120px, 1fr))",
+              gap: 8,
+            }}
+          >
+            {photoRefs.map((ref, i) => (
+              <a
+                key={i}
+                href={photoUrl(ref, 1600)}
+                target="_blank"
+                rel="noopener noreferrer"
+                title={`Open photo ${i + 1} full-size`}
+                style={{ display: "block" }}
+              >
+                <img
+                  src={photoUrl(ref, 400)}
+                  loading="lazy"
+                  alt={`${b.name} photo ${i + 1}`}
+                  style={{
+                    width: "100%",
+                    aspectRatio: "1 / 1",
+                    objectFit: "cover",
+                    borderRadius: 4,
+                    background: "var(--bg-card)",
+                    display: "block",
+                  }}
+                />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {reviews.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <div
+            style={{
+              color: "var(--text-muted)",
+              marginBottom: 8,
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              fontSize: 10,
+              fontWeight: 600,
+            }}
+          >
+            Reviews · {reviews.length}
+          </div>
+          {reviews.map((r, i) => (
+            <div
+              key={i}
+              style={{
+                marginBottom: 10,
+                paddingBottom: 10,
+                borderBottom:
+                  i < reviews.length - 1 ? "1px dashed var(--border)" : "none",
+              }}
+            >
+              <div style={{ marginBottom: 4 }}>
+                <strong style={{ fontSize: 12 }}>{r.author ?? "Guest"}</strong>
+                {typeof r.rating === "number" && (
+                  <span style={{ color: "var(--text-muted)" }}> · ★ {r.rating}</span>
+                )}
+                {r.relative_time && (
+                  <span style={{ color: "var(--text-muted)" }}> · {r.relative_time}</span>
+                )}
+              </div>
+              <div style={{ fontStyle: "italic", color: "var(--text)" }}>{r.text}</div>
             </div>
           ))}
         </div>
@@ -379,6 +518,13 @@ export function ResultsTable({
   const [collapsedIds, setCollapsedIds] = useState<Set<string>>(() => new Set());
   // Same pattern for the per-row generated-site preview panel.
   const [collapsedSiteIds, setCollapsedSiteIds] = useState<Set<string>>(() => new Set());
+  // And for the standalone business-object panel (Google Places data
+  // separated from the AI-derived dossier). Inverted relative to
+  // dossier/site: tracks place_ids that ARE open. Closed by default
+  // (would be noisy to auto-open photos + all reviews on every research
+  // click) — operator opens it via the "▸ business" pill when they want
+  // to see photos / reviews / hours / phones / blurb / map URL / place id.
+  const [openBusinessIds, setOpenBusinessIds] = useState<Set<string>>(() => new Set());
   // Place_ids whose manual-generation panel is currently open. Closed by
   // default; opened by clicking the "Manual" button on a researched row.
   const [manualOpenIds, setManualOpenIds] = useState<Set<string>>(() => new Set());
@@ -422,6 +568,24 @@ export function ResultsTable({
       const next = new Set(prev);
       if (next.has(placeId)) next.delete(placeId);
       else next.add(placeId);
+      return next;
+    });
+  }
+
+  function toggleBusinessPanel(placeId: string) {
+    setOpenBusinessIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(placeId)) next.delete(placeId);
+      else next.add(placeId);
+      return next;
+    });
+  }
+
+  function closeBusinessPanel(placeId: string) {
+    setOpenBusinessIds((prev) => {
+      if (!prev.has(placeId)) return prev;
+      const next = new Set(prev);
+      next.delete(placeId);
       return next;
     });
   }
@@ -473,6 +637,8 @@ export function ResultsTable({
         const cachedBusiness = businessByPlaceId?.get(b.place_id);
         const isSiteCached = Boolean(cachedSite && cachedBusiness);
         const isSitePanelOpen = isSiteCached && !collapsedSiteIds.has(b.place_id);
+        const isBusinessCached = Boolean(cachedBusiness);
+        const isBusinessPanelOpen = isBusinessCached && openBusinessIds.has(b.place_id);
         const anyBusy = isGenerating || isResearching;
         return (
           <div key={b.place_id}>
@@ -534,6 +700,33 @@ export function ResultsTable({
                     }}
                   >
                     {isPanelOpen ? "✓ dossier" : "▸ dossier"}
+                  </button>
+                )}
+                {isBusinessCached && (
+                  <button
+                    type="button"
+                    onClick={() => toggleBusinessPanel(b.place_id)}
+                    title={
+                      isBusinessPanelOpen
+                        ? "Hide business panel"
+                        : "Show Google Places data — photos, reviews, hours, phones"
+                    }
+                    aria-label={
+                      isBusinessPanelOpen ? "Hide business" : "Show business"
+                    }
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: isBusinessPanelOpen ? "var(--accent)" : "var(--text-muted)",
+                      background: isBusinessPanelOpen ? "var(--accent-soft)" : "transparent",
+                      border: `1px solid ${isBusinessPanelOpen ? "var(--accent)" : "var(--border)"}`,
+                      borderRadius: 999,
+                      padding: "2px 8px",
+                      cursor: "pointer",
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {isBusinessPanelOpen ? "✓ business" : "▸ business"}
                   </button>
                 )}
                 {isSiteCached && (
@@ -618,10 +811,12 @@ export function ResultsTable({
               </div>
             </div>
             {isPanelOpen && dossier && (
-              <DossierPanel
-                dossier={dossier}
+              <DossierPanel dossier={dossier} onClose={() => closePanel(b.place_id)} />
+            )}
+            {isBusinessPanelOpen && cachedBusiness && (
+              <BusinessPanel
                 business={cachedBusiness}
-                onClose={() => closePanel(b.place_id)}
+                onClose={() => closeBusinessPanel(b.place_id)}
               />
             )}
             {manualOpenIds.has(b.place_id) &&
