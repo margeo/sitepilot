@@ -44,11 +44,13 @@ export default async (req: Request, _context: Context) => {
     );
   }
 
-  // DEPLOY_URL is the current deploy's URL (branch preview or prod). Falls
-  // back to URL (always prod) only if DEPLOY_URL isn't set. Wrong order
-  // breaks branch deploys because they'd call prod and miss new functions.
-  const baseUrl = process.env.DEPLOY_URL || process.env.URL || "http://localhost:8888";
+  // Derive base URL from the incoming request — always correct for the
+  // current deploy (production or branch preview). Avoids depending on
+  // DEPLOY_URL/URL env vars which can drift between deploy contexts.
+  const reqUrl = new URL(req.url);
+  const baseUrl = `${reqUrl.protocol}//${reqUrl.host}`;
   const bgUrl = `${baseUrl}/.netlify/functions/research-compare-background`;
+  console.log("[research-compare] dispatching to:", bgUrl);
 
   try {
     const res = await fetch(bgUrl, {
