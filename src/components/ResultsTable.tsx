@@ -384,7 +384,15 @@ export function ResultsTable({
                   <span className="badge green">No</span>
                 )}
               </div>
-              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              <div
+                style={{
+                  display: "flex",
+                  gap: 6,
+                  alignItems: "center",
+                  flexWrap: "wrap",
+                  justifyContent: "flex-end",
+                }}
+              >
                 {isResearched && (
                   <button
                     type="button"
