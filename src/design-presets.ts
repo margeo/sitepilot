@@ -15,6 +15,13 @@ export interface DesignOption {
   slug: string;
   label: string;
   description: string;
+  // PALETTE entries: ordered [dominant, accent, background] hex strings.
+  // Used by the live preview swatches in section 3 of the sidebar.
+  colors?: string[];
+  // TYPOGRAPHY entries: CSS font-family values for the display and body
+  // fonts. Used by the live preview to render sample text.
+  displayFont?: string;
+  bodyFont?: string;
 }
 
 // 25 aesthetic directions. Includes the user's 10 base vibes (Editorial,
@@ -189,102 +196,119 @@ export const PALETTES: DesignOption[] = [
     label: "Navy · sun · paper",
     description:
       "Dominant navy #0d2438. Sun-yellow #d99752 accent. Cream paper #f4ecdc background. Warm editorial.",
+    colors: ["#0d2438", "#d99752", "#f4ecdc"],
   },
   {
     slug: "ink-orange-bone",
     label: "Ink · orange · bone",
     description:
       "Dominant ink #1a1a1a. Orange #ff5f1f accent. Bone #fafaf7 background. High-contrast modern.",
+    colors: ["#1a1a1a", "#ff5f1f", "#fafaf7"],
   },
   {
     slug: "forest-sand-brick",
     label: "Forest · sand · brick",
     description:
       "Dominant forest green #2d3a2e. Sand #e8d5a8 secondary. Brick red #c44536 accent. Earthy luxe.",
+    colors: ["#2d3a2e", "#c44536", "#e8d5a8"],
   },
   {
     slug: "black-mint-grays",
     label: "Black · mint · grays",
     description:
       "Black #0a0a0a dominant. Mint #00ff9f accent. Neutral grays for body text. Tech-forward dark.",
+    colors: ["#0a0a0a", "#00ff9f", "#cccccc"],
   },
   {
     slug: "aegean-bone",
     label: "Aegean blues + bone white",
     description:
       "Aegean blue #00509d dominant. Bone white #fafaf7 background. Light sand #f0e6d2 secondary. Crisp Greek-island.",
+    colors: ["#00509d", "#f0e6d2", "#fafaf7"],
   },
   {
     slug: "terracotta-cream-navy",
     label: "Terracotta + cream + navy",
     description:
       "Cream #f4ecdc background. Terracotta #c44536 dominant warm. Navy #0d2438 type and accent. Mediterranean editorial classic.",
+    colors: ["#c44536", "#0d2438", "#f4ecdc"],
   },
   {
     slug: "olive-sand-ink",
     label: "Olive + sand + ink",
     description:
       "Olive green #5a6b3d dominant. Warm sand #e8d5a8 background. Deep ink #1a1a1a type. Earthy, grounded.",
+    colors: ["#5a6b3d", "#1a1a1a", "#e8d5a8"],
   },
   {
     slug: "emerald-gold",
     label: "Deep emerald + gold",
     description:
       "Deep emerald #0e3b2e dominant. Gold #c9a96e accent. Cream #f4ecdc background highlights. Luxe heritage.",
+    colors: ["#0e3b2e", "#c9a96e", "#f4ecdc"],
   },
   {
     slug: "high-contrast-bw",
     label: "High-contrast B&W",
     description:
       "Pure black #000000 + pure white #ffffff. One single typographic accent (red, electric blue, or yellow) used sparingly. Brutalist or French-boutique adjacent.",
+    colors: ["#000000", "#d4001a", "#ffffff"],
   },
   {
     slug: "soft-pastels",
     label: "Soft pastels (pink · mint · cream)",
     description:
       "Powder pink #ffd5d5 + mint #c8e6c9 + butter cream #fff5d6. Optional dusty blue accent. Soft gen-z friendly.",
+    colors: ["#ffd5d5", "#c8e6c9", "#fff5d6"],
   },
   {
     slug: "navy-brass-ivory",
     label: "Navy · brass · ivory",
     description:
       "Deep navy primary. Brass #b8860b accent. Ivory background. Luxury-villa palette.",
+    colors: ["#14323f", "#b8860b", "#f5f0e1"],
   },
   {
     slug: "bone-espresso-sage",
     label: "Bone · espresso · sage",
     description:
       "Bone #fafaf7 dominant. Espresso brown #3d2817 type. Sage green #a8b5a0 accent. Specialty coffee.",
+    colors: ["#3d2817", "#a8b5a0", "#fafaf7"],
   },
   {
     slug: "black-amber-oxblood",
     label: "Black · amber · oxblood",
     description:
       "Deep black #0a0a0a dominant. Amber #d4a574 accent. Oxblood #722f37 secondary. Cocktail bar / dim.",
+    colors: ["#0a0a0a", "#d4a574", "#722f37"],
   },
   {
     slug: "warm-cream-flour-rust",
     label: "Cream · flour · rust",
     description:
       "Warm cream #f5e9d4 dominant. Flour beige #e8d5b7 secondary. Deep brown #3d2817 type. Rust #b2492a accent. Artisan bakery.",
+    colors: ["#f5e9d4", "#b2492a", "#e8d5b7"],
   },
   {
     slug: "vintage-brown-cream-red",
     label: "Brown · cream · barber-red",
     description:
       "Deep brown #3d2817 dominant. Cream secondary. Barber red #c41e3a accent. Vintage barber.",
+    colors: ["#3d2817", "#c41e3a", "#f5e9d4"],
   },
   {
     slug: "turquoise-coral-sand",
     label: "Turquoise · coral · sand",
     description:
       "Turquoise #2c8b9a dominant. Coral #ff6b6b accent. Sand #f5e6d3 background. Beach bar / summer bright.",
+    colors: ["#2c8b9a", "#ff6b6b", "#f5e6d3"],
   },
   {
     slug: "blush-burgundy-cream",
     label: "Blush · burgundy · cream",
     description:
       "Blush #f5d5d5 dominant. Deep burgundy accent. Cream background. Beauty / nails / soft refined.",
+    colors: ["#f5d5d5", "#800020", "#f5e9d4"],
   },
 ];
 
@@ -297,36 +321,48 @@ export const TYPOGRAPHY: DesignOption[] = [
     label: "Editorial serif (Fraunces / Cormorant)",
     description:
       "Display: Fraunces (variable serif, SOFT axis) OR Cormorant Garamond. Body: Manrope or Bricolage Grotesque. Editorial elegance with a contemporary twist.",
+    displayFont: "'Fraunces', 'Cormorant Garamond', serif",
+    bodyFont: "'Manrope', 'Bricolage Grotesque', sans-serif",
   },
   {
     slug: "geometric-modern",
     label: "Geometric modern (Geist / Satoshi)",
     description:
       "Display + body: Geist Sans (or Satoshi as fallback via Inter). Mono accents: Geist Mono for labels and specs. Modern minimal — Apple / Linear / Stripe adjacent.",
+    displayFont: "'Geist', 'Inter', sans-serif",
+    bodyFont: "'Geist', 'Inter', sans-serif",
   },
   {
     slug: "humanist-friendly",
     label: "Humanist friendly (Manrope / Outfit)",
     description:
       "Display + body: Manrope as primary, Outfit as alternative. Warm, rounded, approachable sans-serif throughout. Friendly tone — small business hospitality.",
+    displayFont: "'Manrope', 'Outfit', sans-serif",
+    bodyFont: "'Manrope', 'Outfit', sans-serif",
   },
   {
     slug: "brutalist-default",
     label: "Brutalist default (Times / Helvetica)",
     description:
       "Use the browser default fonts only — Times New Roman for serif headings, Helvetica or system-ui for body. Brutalist / raw / anti-design.",
+    displayFont: "'Times New Roman', Times, serif",
+    bodyFont: "Helvetica, Arial, sans-serif",
   },
   {
     slug: "display-contrast-mono",
     label: "Display contrast (Cormorant + Mono)",
     description:
       "Display: Cormorant Garamond (large, italic for accents). Body: clean humanist sans (Manrope or Inter). Editorial labels and small-caps in JetBrains Mono. High-contrast pairing.",
+    displayFont: "'Cormorant Garamond', serif",
+    bodyFont: "'JetBrains Mono', 'Manrope', monospace",
   },
   {
     slug: "vintage-classical",
     label: "Vintage classical (Playfair + Bebas)",
     description:
       "Display: Playfair Display (high-contrast serif) OR Bebas Neue (condensed sans for impact). Body: Inter. Vintage poster / barber / industrial.",
+    displayFont: "'Bebas Neue', 'Playfair Display', serif",
+    bodyFont: "'Inter', sans-serif",
   },
 ];
 

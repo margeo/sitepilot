@@ -13,6 +13,8 @@ import {
   SECTOR_PRESETS,
   TYPOGRAPHY,
   pickRandom,
+  type DesignOption,
+  type SectorPreset,
 } from "../design-presets";
 import { autocompleteLocation, type LocationSuggestion } from "../lib/api";
 
@@ -40,6 +42,210 @@ function validateLocation(loc: string): { ok: boolean; hint?: string } {
   if (v.length < 3) return { ok: false, hint: "Enter at least 3 characters" };
   if (!/[A-Za-zΑ-ω]/.test(v)) return { ok: false, hint: "Location must contain letters" };
   return { ok: true };
+}
+
+// Live preview blocks — render below each dropdown so the operator sees
+// what the selected option means at a glance. All rendering is data-
+// driven from src/design-presets.ts (colors[] for palettes, displayFont/
+// bodyFont for typography, description for aesthetic).
+
+function AestheticPreview({ option }: { option: DesignOption | undefined }) {
+  if (!option) return null;
+  return (
+    <div
+      style={{
+        marginTop: 4,
+        marginBottom: 6,
+        fontSize: 11,
+        color: "var(--text-muted)",
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-sm)",
+        padding: "6px 10px",
+        lineHeight: 1.5,
+      }}
+    >
+      {option.description}
+    </div>
+  );
+}
+
+function PalettePreview({ option }: { option: DesignOption | undefined }) {
+  if (!option || !option.colors || option.colors.length === 0) return null;
+  return (
+    <div
+      style={{
+        marginTop: 4,
+        marginBottom: 6,
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-sm)",
+        padding: "6px 10px",
+      }}
+    >
+      <div style={{ display: "flex", gap: 6, marginBottom: 6 }}>
+        {option.colors.map((c, i) => (
+          <div
+            key={i}
+            title={c}
+            style={{
+              flex: 1,
+              height: 28,
+              background: c,
+              border: "1px solid var(--border)",
+              borderRadius: 4,
+            }}
+          />
+        ))}
+      </div>
+      <div
+        style={{
+          display: "flex",
+          gap: 6,
+          fontFamily: "ui-monospace, Menlo, Consolas, monospace",
+          fontSize: 10,
+          color: "var(--text-muted)",
+        }}
+      >
+        {option.colors.map((c, i) => (
+          <span key={i} style={{ flex: 1, textAlign: "center" }}>
+            {c}
+          </span>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function TypographyPreview({ option }: { option: DesignOption | undefined }) {
+  if (!option || !option.displayFont || !option.bodyFont) return null;
+  return (
+    <div
+      style={{
+        marginTop: 4,
+        marginBottom: 6,
+        background: "var(--bg-card)",
+        border: "1px solid var(--border)",
+        borderRadius: "var(--radius-sm)",
+        padding: "10px 12px",
+      }}
+    >
+      <div
+        style={{
+          fontFamily: option.displayFont,
+          fontSize: 22,
+          lineHeight: 1.1,
+          color: "var(--text)",
+          marginBottom: 4,
+        }}
+      >
+        Sample Heading
+      </div>
+      <div
+        style={{
+          fontFamily: option.bodyFont,
+          fontSize: 12.5,
+          lineHeight: 1.5,
+          color: "var(--text-muted)",
+        }}
+      >
+        The quick brown fox jumps over the lazy dog. 1234567890.
+      </div>
+    </div>
+  );
+}
+
+function PresetPreview({
+  preset,
+}: {
+  preset: SectorPreset | undefined;
+}) {
+  if (!preset) return null;
+  const aesthetic = AESTHETICS.find((a) => a.slug === preset.aestheticSlug);
+  const palette = PALETTES.find((p) => p.slug === preset.paletteSlug);
+  const typography = TYPOGRAPHY.find((t) => t.slug === preset.typographySlug);
+  return (
+    <div
+      style={{
+        marginTop: 4,
+        marginBottom: 10,
+        background: "var(--bg-card)",
+        border: "1px solid var(--accent)",
+        borderRadius: "var(--radius-sm)",
+        padding: "8px 10px",
+      }}
+    >
+      <div
+        style={{
+          fontSize: 10,
+          color: "var(--accent)",
+          fontWeight: 700,
+          textTransform: "uppercase",
+          letterSpacing: "0.06em",
+          marginBottom: 6,
+        }}
+      >
+        Preset preview
+      </div>
+      {palette?.colors && palette.colors.length > 0 && (
+        <div style={{ display: "flex", gap: 4, marginBottom: 6 }}>
+          {palette.colors.map((c, i) => (
+            <div
+              key={i}
+              title={c}
+              style={{
+                flex: 1,
+                height: 18,
+                background: c,
+                border: "1px solid var(--border)",
+                borderRadius: 3,
+              }}
+            />
+          ))}
+        </div>
+      )}
+      {typography && typography.displayFont && (
+        <div
+          style={{
+            fontFamily: typography.displayFont,
+            fontSize: 18,
+            lineHeight: 1.05,
+            color: "var(--text)",
+            marginBottom: 2,
+          }}
+        >
+          Sample Heading
+        </div>
+      )}
+      {typography && typography.bodyFont && (
+        <div
+          style={{
+            fontFamily: typography.bodyFont,
+            fontSize: 11,
+            lineHeight: 1.45,
+            color: "var(--text-muted)",
+            marginBottom: 6,
+          }}
+        >
+          Body sample text — the quick brown fox.
+        </div>
+      )}
+      {aesthetic && (
+        <div
+          style={{
+            fontSize: 10.5,
+            color: "var(--text-muted)",
+            lineHeight: 1.45,
+            paddingTop: 4,
+            borderTop: "1px dashed var(--border)",
+          }}
+        >
+          {aesthetic.label}
+          <span style={{ opacity: 0.7 }}> — {aesthetic.description.split(".")[0]}.</span>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export function SearchForm({
@@ -433,12 +639,21 @@ export function SearchForm({
           {(() => {
             const presetsForSector = SECTOR_PRESETS.filter((p) => p.sector === sector);
             if (presetsForSector.length === 0) return null;
+            // Try to detect which preset is currently active by matching all
+            // three slugs — surfaces the matching bundle as a preview without
+            // a separate "active preset" state.
+            const activePreset = presetsForSector.find(
+              (p) =>
+                p.aestheticSlug === aestheticSlug &&
+                p.paletteSlug === paletteSlug &&
+                p.typographySlug === typographySlug,
+            );
             return (
               <>
                 <label htmlFor="sectorPreset">Sector preset</label>
                 <select
                   id="sectorPreset"
-                  value=""
+                  value={activePreset?.slug ?? ""}
                   onChange={(e) => {
                     const preset = SECTOR_PRESETS.find((p) => p.slug === e.target.value);
                     if (!preset) return;
@@ -456,16 +671,18 @@ export function SearchForm({
                     </option>
                   ))}
                 </select>
-                <div
-                  style={{
-                    color: "var(--text-muted)",
-                    fontSize: 11,
-                    marginTop: 4,
-                    marginBottom: 10,
-                  }}
-                >
-                  Auto-fills the three dropdowns below. You can still override individual slots.
-                </div>
+                <PresetPreview preset={activePreset} />
+                {!activePreset && (
+                  <div
+                    style={{
+                      color: "var(--text-muted)",
+                      fontSize: 11,
+                      marginBottom: 10,
+                    }}
+                  >
+                    Auto-fills the three dropdowns below. You can still override individual slots.
+                  </div>
+                )}
               </>
             );
           })()}
@@ -485,6 +702,7 @@ export function SearchForm({
               </option>
             ))}
           </select>
+          <AestheticPreview option={AESTHETICS.find((a) => a.slug === aestheticSlug)} />
 
           <label htmlFor="paletteSlug" style={{ marginTop: 10 }}>
             Color palette
@@ -503,6 +721,7 @@ export function SearchForm({
               </option>
             ))}
           </select>
+          <PalettePreview option={PALETTES.find((p) => p.slug === paletteSlug)} />
 
           <label htmlFor="typographySlug" style={{ marginTop: 10 }}>
             Typography pair
@@ -521,6 +740,7 @@ export function SearchForm({
               </option>
             ))}
           </select>
+          <TypographyPreview option={TYPOGRAPHY.find((t) => t.slug === typographySlug)} />
 
           <div
             style={{
