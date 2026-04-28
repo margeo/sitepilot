@@ -593,6 +593,77 @@ export default function App() {
           </div>
         )}
 
+        {(() => {
+          // Cumulative manual-generation footprint, derived from siteByPlaceId.
+          // Persists with the cache, so the number includes every manual site
+          // ever saved in this browser (until the operator clears storage).
+          const manualSites = Array.from(siteByPlaceId.values()).filter(
+            (s) => s.generated_by === "manual",
+          );
+          if (manualSites.length === 0) return null;
+          const inTok = manualSites.reduce(
+            (a, s) => a + (s.input_tokens_estimate ?? 0),
+            0,
+          );
+          const outTok = manualSites.reduce(
+            (a, s) => a + (s.output_tokens_estimate ?? 0),
+            0,
+          );
+          const totalTok = inTok + outTok;
+          const equivCost = manualSites.reduce(
+            (a, s) => a + (s.api_equivalent_cost_usd ?? 0),
+            0,
+          );
+          // Rough heuristic for "how close are you to a Claude Max limit?"
+          // Anthropic doesn't publish hard numbers; community estimates put
+          // Max $200 at roughly 50 heavy Opus messages per 5-hour window
+          // (~5M tokens of throughput is a generous upper bound). We label
+          // the % as "approx." everywhere it's shown.
+          const ROUGH_5H_WINDOW = 5_000_000;
+          const pctOfWindow = (totalTok / ROUGH_5H_WINDOW) * 100;
+          return (
+            <div
+              className="banner"
+              style={{
+                marginBottom: 14,
+                fontSize: 12,
+                borderLeft: "3px solid var(--accent)",
+                display: "flex",
+                flexWrap: "wrap",
+                gap: 10,
+                alignItems: "center",
+              }}
+              title="Cumulative manual-generation footprint across every site cached in this browser. claude.ai web is flat-rate so actual marginal cost is $0 — the dollar figure is what these generations would have billed via the Opus 4.7 API."
+            >
+              <strong style={{ color: "var(--accent)" }}>
+                Manual usage · claude.ai Max
+              </strong>
+              <span style={{ color: "var(--text-muted)" }}>·</span>
+              <span>
+                {manualSites.length} site{manualSites.length === 1 ? "" : "s"}
+              </span>
+              <span style={{ color: "var(--text-muted)" }}>·</span>
+              <span>
+                ~{totalTok.toLocaleString("en-US")} tokens
+                <span style={{ color: "var(--text-muted)" }}>
+                  {" "}
+                  ({inTok.toLocaleString("en-US")} in / {outTok.toLocaleString("en-US")} out)
+                </span>
+              </span>
+              <span style={{ color: "var(--text-muted)" }}>·</span>
+              <span>
+                ~${equivCost.toFixed(4)}{" "}
+                <span style={{ color: "var(--text-muted)" }}>
+                  equivalent if API · actual $0
+                </span>
+              </span>
+              <span style={{ color: "var(--text-muted)", marginLeft: "auto", fontSize: 11 }}>
+                ≈{pctOfWindow.toFixed(2)}% of a rough 5h Max window
+              </span>
+            </div>
+          );
+        })()}
+
         {lastResearch && (
           <div
             className="banner"
