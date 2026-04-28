@@ -266,10 +266,28 @@ export function ResultsTable({
     });
   }
 
+  function togglePanel(placeId: string) {
+    setCollapsedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(placeId)) next.delete(placeId);
+      else next.add(placeId);
+      return next;
+    });
+  }
+
   function closeSitePanel(placeId: string) {
     setCollapsedSiteIds((prev) => {
       const next = new Set(prev);
       next.add(placeId);
+      return next;
+    });
+  }
+
+  function toggleSitePanel(placeId: string) {
+    setCollapsedSiteIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(placeId)) next.delete(placeId);
+      else next.add(placeId);
       return next;
     });
   }
@@ -352,16 +370,54 @@ export function ResultsTable({
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 {isResearched && (
-                  <span
-                    title="Dossier cached — click Generate site to use it"
+                  <button
+                    type="button"
+                    onClick={() => togglePanel(b.place_id)}
+                    title={
+                      isPanelOpen
+                        ? "Hide cached dossier"
+                        : "Show cached dossier (no API call)"
+                    }
+                    aria-label={isPanelOpen ? "Hide dossier" : "Show dossier"}
                     style={{
-                      fontSize: 14,
-                      color: "var(--accent, #5fa)",
+                      fontSize: 11,
                       fontWeight: 700,
+                      color: isPanelOpen ? "var(--accent)" : "var(--text-muted)",
+                      background: isPanelOpen ? "var(--accent-soft)" : "transparent",
+                      border: `1px solid ${isPanelOpen ? "var(--accent)" : "var(--border)"}`,
+                      borderRadius: 999,
+                      padding: "2px 8px",
+                      cursor: "pointer",
+                      lineHeight: 1.2,
                     }}
                   >
-                    ✓
-                  </span>
+                    {isPanelOpen ? "✓ dossier" : "▸ dossier"}
+                  </button>
+                )}
+                {isSiteCached && (
+                  <button
+                    type="button"
+                    onClick={() => toggleSitePanel(b.place_id)}
+                    title={
+                      isSitePanelOpen
+                        ? "Hide cached site preview"
+                        : "Show cached site preview (no API call)"
+                    }
+                    aria-label={isSitePanelOpen ? "Hide site" : "Show site"}
+                    style={{
+                      fontSize: 11,
+                      fontWeight: 700,
+                      color: isSitePanelOpen ? "var(--accent)" : "var(--text-muted)",
+                      background: isSitePanelOpen ? "var(--accent-soft)" : "transparent",
+                      border: `1px solid ${isSitePanelOpen ? "var(--accent)" : "var(--border)"}`,
+                      borderRadius: 999,
+                      padding: "2px 8px",
+                      cursor: "pointer",
+                      lineHeight: 1.2,
+                    }}
+                  >
+                    {isSitePanelOpen ? "✓ site" : "▸ site"}
+                  </button>
                 )}
                 <button
                   className="btn btn-sm btn-secondary"
