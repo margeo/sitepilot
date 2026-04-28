@@ -4,7 +4,13 @@ import { SearchForm } from "./components/SearchForm";
 import { ResultsTable } from "./components/ResultsTable";
 import { SitePreview } from "./components/SitePreview";
 import { ScreenshotImport } from "./components/ScreenshotImport";
-import { fetchDetails, generateSite, researchBusiness, searchBusinesses } from "./lib/api";
+import {
+  fetchDetails,
+  generateSite,
+  phaseCostUSD,
+  researchBusiness,
+  searchBusinesses,
+} from "./lib/api";
 import type {
   BusinessBasic,
   BusinessDetails,
@@ -35,7 +41,11 @@ function loadResearchModel(): DesignModelId | undefined {
 export default function App() {
   const [searching, setSearching] = useState(false);
   const [results, setResults] = useState<BusinessBasic[]>([]);
-  const [demoMode, setDemoMode] = useState(true); // assume demo until proven otherwise
+  // undefined = probe in flight, true = backend is in demo mode (no Google
+  // key), false = backend has the key. Banners render only when known —
+  // avoids the demo-mode flash that an optimistic default would cause on
+  // every page load.
+  const [demoMode, setDemoMode] = useState<boolean | undefined>(undefined);
   const [demoNote, setDemoNote] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [searchRev, setSearchRev] = useState(0); // bumps on each successful search -> triggers flash
@@ -76,6 +86,20 @@ export default function App() {
   const [dossierByPlaceId, setDossierByPlaceId] = useState<Map<string, unknown>>(
     () => new Map(),
   );
+
+  // Summary of the most recent successful Research click — surfaced as a
+  // banner in the main pane so the user can see at a glance what came back
+  // (model the API actually served, sources count, cost) without opening F12.
+  interface ResearchSummary {
+    placeId: string;
+    businessName: string;
+    requestedModel: DesignModelId;
+    servedModel: string;
+    sources: number;
+    costUSD: number;
+    elapsedMs: number;
+  }
+  const [lastResearch, setLastResearch] = useState<ResearchSummary | null>(null);
 
   // Probe the backend once on mount to know whether we're in demo mode.
   useEffect(() => {
@@ -127,6 +151,22 @@ export default function App() {
         const next = new Map(prev);
         next.set(b.place_id, r.dossier);
         return next;
+      });
+      const sources = (r.dossier as { sources?: unknown[] } | null)?.sources?.length ?? 0;
+      const costUSD = phaseCostUSD(
+        researchModel,
+        r.usage?.input_tokens,
+        r.usage?.output_tokens,
+        true,
+      );
+      setLastResearch({
+        placeId: b.place_id,
+        businessName: b.name,
+        requestedModel: researchModel,
+        servedModel: r.model,
+        sources,
+        costUSD,
+        elapsedMs: r.elapsedMs,
       });
     } catch (e) {
       setError(e instanceof Error ? e.message : String(e));
@@ -212,7 +252,7 @@ export default function App() {
           onResearchModelChange={setResearchModel}
         />
 
-        {!demoMode && (
+        {demoMode === false && (
           <div style={{ marginTop: 20 }}>
             <div
               style={{
@@ -291,6 +331,36 @@ export default function App() {
           </div>
         )}
 
+        {lastResearch && (
+          <div
+            className="banner"
+            style={{
+              marginBottom: 14,
+              fontSize: 12,
+              borderLeft: "3px solid var(--accent)",
+            }}
+          >
+            <strong style={{ color: "var(--accent)" }}>Research done</strong>
+            <span style={{ color: "var(--text-muted)" }}>·</span>
+            <span style={{ fontWeight: 600 }}>{lastResearch.businessName}</span>
+            <span style={{ color: "var(--text-muted)" }}>·</span>
+            <span>
+              served by <code>{lastResearch.servedModel}</code>
+            </span>
+            <span style={{ color: "var(--text-muted)" }}>·</span>
+            <span>
+              {lastResearch.sources} source{lastResearch.sources === 1 ? "" : "s"}
+            </span>
+            <span style={{ color: "var(--text-muted)" }}>·</span>
+            <span>${lastResearch.costUSD.toFixed(4)}</span>
+            <span style={{ color: "var(--text-muted)" }}>·</span>
+            <span>{(lastResearch.elapsedMs / 1000).toFixed(1)}s</span>
+            <span style={{ color: "var(--text-muted)", marginLeft: "auto" }}>
+              Click <strong>Generate site</strong> on this row to use the dossier.
+            </span>
+          </div>
+        )}
+
         {results.length === 0 && !searching && !error && !lastFilters && (
           <div className="empty-state">
             <h3>No results yet</h3>
@@ -346,6 +416,7 @@ export default function App() {
             selectedId={selectedId}
             loadingId={busyId}
             researchingId={researchingId}
+            researchedIds={dossierByPlaceId}
           />
         </div>
 

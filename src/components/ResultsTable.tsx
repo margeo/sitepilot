@@ -7,6 +7,10 @@ interface Props {
   selectedId?: string;
   loadingId?: string;
   researchingId?: string;
+  // place_ids that have a cached dossier — drives the "Re-research" label and
+  // unlocks the Generate site button visually (Generate site itself enforces
+  // this server-checkable rule too).
+  researchedIds?: ReadonlyMap<string, unknown>;
 }
 
 export function ResultsTable({
@@ -16,6 +20,7 @@ export function ResultsTable({
   selectedId,
   loadingId,
   researchingId,
+  researchedIds,
 }: Props) {
   if (results.length === 0) return null;
 
@@ -32,6 +37,7 @@ export function ResultsTable({
         const isSelected = selectedId === b.place_id;
         const isGenerating = loadingId === b.place_id;
         const isResearching = researchingId === b.place_id;
+        const isResearched = Boolean(researchedIds?.has(b.place_id));
         const anyBusy = isGenerating || isResearching;
         return (
           <div
@@ -61,7 +67,19 @@ export function ResultsTable({
                 <span className="badge green">No</span>
               )}
             </div>
-            <div style={{ display: "flex", gap: 6 }}>
+            <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+              {isResearched && (
+                <span
+                  title="Dossier cached — click Generate site to use it"
+                  style={{
+                    fontSize: 14,
+                    color: "var(--accent, #5fa)",
+                    fontWeight: 700,
+                  }}
+                >
+                  ✓
+                </span>
+              )}
               <button
                 className="btn btn-sm btn-secondary"
                 disabled={anyBusy}
@@ -72,6 +90,8 @@ export function ResultsTable({
                     <span className="spinner" />
                     Researching…
                   </>
+                ) : isResearched ? (
+                  "Re-research"
                 ) : (
                   "Research"
                 )}
@@ -80,6 +100,12 @@ export function ResultsTable({
                 className="btn btn-sm"
                 disabled={anyBusy}
                 onClick={() => onSelect(b)}
+                title={
+                  !isResearched
+                    ? "Click Research first — Generate site uses the cached dossier"
+                    : undefined
+                }
+                style={!isResearched ? { opacity: 0.55 } : undefined}
               >
                 {isGenerating ? (
                   <>

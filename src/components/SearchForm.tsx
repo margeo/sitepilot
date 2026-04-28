@@ -12,7 +12,7 @@ import { autocompleteLocation, type LocationSuggestion } from "../lib/api";
 interface Props {
   onSearch: (filters: SearchFilters) => void;
   loading: boolean;
-  demoMode: boolean;
+  demoMode: boolean | undefined;
   designModel: DesignModelId | undefined;
   onDesignModelChange: (id: DesignModelId | undefined) => void;
   researchModel: DesignModelId | undefined;
@@ -233,7 +233,7 @@ export function SearchForm({
               <code>GOOGLE_MAPS_API_KEY</code> to <code>.env</code> for real results.
             </div>
           )}
-          {locationCheck.ok && !demoMode && (
+          {locationCheck.ok && demoMode === false && (
             <div style={{ color: "var(--text-muted)", fontSize: 11, marginTop: 4 }}>
               Google Places will be queried with “{location.trim()}”.
             </div>

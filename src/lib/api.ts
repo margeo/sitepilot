@@ -19,7 +19,12 @@ function fmtTokens(n: number | undefined): string {
 }
 
 // Compute per-phase cost (tokens × rate + per-call search surcharge).
-function phaseCostUSD(modelId: DesignModelId | undefined, inTok = 0, outTok = 0, isResearch = false): number {
+export function phaseCostUSD(
+  modelId: DesignModelId | undefined,
+  inTok = 0,
+  outTok = 0,
+  isResearch = false,
+): number {
   if (!modelId) return 0;
   const rates = MODEL_RATES[modelId];
   if (!rates) return 0;
