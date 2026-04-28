@@ -15,10 +15,12 @@ interface Props {
   // unlocks the Generate site button visually (Generate site itself enforces
   // this server-checkable rule too).
   researchedIds?: ReadonlyMap<string, unknown>;
-  // Per-row generated-site cache. Each entry has the produced HTML +
-  // metadata (site) and the enriched business object that SitePreview
-  // needs (business). Both are persisted to localStorage by App.tsx.
-  siteByPlaceId?: ReadonlyMap<string, GeneratedSite>;
+  // Per-row generated-site cache — array per place_id so the operator can
+  // keep one version per provider (Claude + ChatGPT + Gemini side by side).
+  // The site panel renders tabs across the top to switch between them.
+  // businessByPlaceId stays single (one BusinessDetails per row regardless
+  // of how many sites it spawned).
+  siteByPlaceId?: ReadonlyMap<string, GeneratedSite[]>;
   businessByPlaceId?: ReadonlyMap<string, BusinessDetails>;
   // Save handler for the manual (claude.ai web) generation path.
   onManualSiteSave?: (placeId: string, site: GeneratedSite) => void;
@@ -500,6 +502,134 @@ function BusinessPanel({
   );
 }
 
+// Renders the site preview panel with tabs across the top — one per saved
+// version (Claude / ChatGPT / Gemini / etc.). Lets the operator switch
+// between provider outputs to compare them.
+function SiteVersionsPanel({
+  sites,
+  business,
+  onClose,
+}: {
+  sites: GeneratedSite[];
+  business: BusinessDetails;
+  onClose: () => void;
+}) {
+  // Default to most recently saved (last entry of the array) so a fresh
+  // generation immediately shows up when the panel auto-opens.
+  const [activeProvider, setActiveProvider] = useState<string>(
+    () => sites[sites.length - 1]?.provider ?? sites[0]?.provider ?? "",
+  );
+  const activeSite =
+    sites.find((s) => s.provider === activeProvider) ?? sites[sites.length - 1];
+
+  function labelFor(s: GeneratedSite): string {
+    // Strip the "manual:" prefix on display ("manual:claude" → "Claude").
+    const provider = (s.provider ?? "").replace(/^manual:/, "");
+    if (provider === "claude") return "Claude";
+    if (provider === "chatgpt") return "ChatGPT";
+    if (provider === "gemini") return "Gemini";
+    if (provider.startsWith("v3_")) return "API";
+    return provider || "Site";
+  }
+
+  return (
+    <div
+      style={{
+        position: "relative",
+        background: "var(--bg-elev)",
+        borderBottom: "1px solid var(--border)",
+        padding: "8px 16px 16px 16px",
+      }}
+    >
+      <button
+        type="button"
+        onClick={onClose}
+        aria-label="Close site preview"
+        title="Close site preview"
+        style={{
+          position: "absolute",
+          top: 10,
+          right: 16,
+          zIndex: 2,
+          width: 26,
+          height: 26,
+          padding: 0,
+          background: "transparent",
+          border: "1px solid var(--border)",
+          borderRadius: 6,
+          color: "var(--text-muted)",
+          cursor: "pointer",
+          fontSize: 14,
+          lineHeight: 1,
+          display: "flex",
+          alignItems: "center",
+          justifyContent: "center",
+        }}
+      >
+        ✕
+      </button>
+
+      {sites.length > 1 && (
+        <div
+          style={{
+            display: "flex",
+            gap: 6,
+            flexWrap: "wrap",
+            marginTop: 4,
+            marginBottom: 12,
+            paddingRight: 36,
+          }}
+        >
+          <span
+            style={{
+              fontSize: 11,
+              color: "var(--text-muted)",
+              alignSelf: "center",
+              textTransform: "uppercase",
+              letterSpacing: "0.06em",
+              marginRight: 4,
+            }}
+          >
+            Versions ·
+          </span>
+          {sites.map((s) => {
+            const isActive = s.provider === activeSite?.provider;
+            return (
+              <button
+                key={s.provider}
+                type="button"
+                onClick={() => setActiveProvider(s.provider ?? "")}
+                title={`Switch to ${labelFor(s)} version (${s.model ?? ""})`}
+                style={{
+                  fontSize: 11,
+                  fontWeight: 700,
+                  color: isActive ? "var(--accent)" : "var(--text-muted)",
+                  background: isActive ? "var(--accent-soft)" : "transparent",
+                  border: `1px solid ${isActive ? "var(--accent)" : "var(--border)"}`,
+                  borderRadius: 6,
+                  padding: "4px 10px",
+                  cursor: "pointer",
+                  lineHeight: 1.2,
+                }}
+              >
+                {labelFor(s)}
+                {typeof s.api_equivalent_cost_usd === "number" && (
+                  <span style={{ color: "var(--text-muted)", fontWeight: 500 }}>
+                    {" "}
+                    · ~${s.api_equivalent_cost_usd.toFixed(2)}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+      )}
+
+      {activeSite && <SitePreview business={business} site={activeSite} />}
+    </div>
+  );
+}
+
 export function ResultsTable({
   results,
   onSelect,
@@ -641,9 +771,9 @@ export function ResultsTable({
         const dossier = researchedIds?.get(b.place_id) as DossierShape | undefined;
         const isResearched = Boolean(dossier);
         const isPanelOpen = isResearched && !collapsedIds.has(b.place_id);
-        const cachedSite = siteByPlaceId?.get(b.place_id);
+        const cachedSites = siteByPlaceId?.get(b.place_id) ?? [];
         const cachedBusiness = businessByPlaceId?.get(b.place_id);
-        const isSiteCached = Boolean(cachedSite && cachedBusiness);
+        const isSiteCached = cachedSites.length > 0 && Boolean(cachedBusiness);
         const isSitePanelOpen = isSiteCached && !collapsedSiteIds.has(b.place_id);
         const isBusinessCached = Boolean(cachedBusiness);
         const isBusinessPanelOpen = isBusinessCached && openBusinessIds.has(b.place_id);
@@ -744,7 +874,7 @@ export function ResultsTable({
                     title={
                       isSitePanelOpen
                         ? "Hide cached site preview"
-                        : "Show cached site preview (no API call)"
+                        : `Show cached site preview${cachedSites.length > 1 ? ` (${cachedSites.length} versions)` : ""}`
                     }
                     aria-label={isSitePanelOpen ? "Hide site" : "Show site"}
                     style={{
@@ -759,7 +889,8 @@ export function ResultsTable({
                       lineHeight: 1.2,
                     }}
                   >
-                    {isSitePanelOpen ? "✓ site" : "▸ site"}
+                    {isSitePanelOpen ? "✓" : "▸"} site
+                    {cachedSites.length > 1 ? ` × ${cachedSites.length}` : ""}
                   </button>
                 )}
                 <button
@@ -840,52 +971,12 @@ export function ResultsTable({
                   onClose={() => toggleManualPanel(b.place_id)}
                 />
               )}
-            {isSitePanelOpen && cachedSite && cachedBusiness && (
-              <div
-                style={{
-                  position: "relative",
-                  background: "var(--bg-elev)",
-                  borderBottom: "1px solid var(--border)",
-                  padding: "8px 16px 16px 16px",
-                }}
-              >
-                <button
-                  type="button"
-                  onClick={() => closeSitePanel(b.place_id)}
-                  aria-label="Close site preview"
-                  title="Close site preview"
-                  style={{
-                    position: "absolute",
-                    top: 10,
-                    right: 16,
-                    zIndex: 2,
-                    width: 26,
-                    height: 26,
-                    padding: 0,
-                    background: "transparent",
-                    border: "1px solid var(--border)",
-                    borderRadius: 6,
-                    color: "var(--text-muted)",
-                    cursor: "pointer",
-                    fontSize: 14,
-                    lineHeight: 1,
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                  onMouseEnter={(e) => {
-                    e.currentTarget.style.background = "var(--bg-card)";
-                    e.currentTarget.style.color = "var(--text)";
-                  }}
-                  onMouseLeave={(e) => {
-                    e.currentTarget.style.background = "transparent";
-                    e.currentTarget.style.color = "var(--text-muted)";
-                  }}
-                >
-                  ✕
-                </button>
-                <SitePreview business={cachedBusiness} site={cachedSite} />
-              </div>
+            {isSitePanelOpen && cachedSites.length > 0 && cachedBusiness && (
+              <SiteVersionsPanel
+                sites={cachedSites}
+                business={cachedBusiness}
+                onClose={() => closeSitePanel(b.place_id)}
+              />
             )}
           </div>
         );

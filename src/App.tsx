@@ -120,9 +120,23 @@ export default function App() {
   const [dossierByPlaceId, setDossierByPlaceId] = useState<Map<string, unknown>>(() =>
     loadMap<unknown>(LS_DOSSIER_KEY),
   );
-  const [siteByPlaceId, setSiteByPlaceId] = useState<Map<string, GeneratedSite>>(() =>
-    loadMap<GeneratedSite>(LS_SITE_KEY),
-  );
+  // Sites are stored as an ARRAY per place_id so the operator can keep
+  // versions from multiple providers (Claude vs ChatGPT vs Gemini) and
+  // switch between them via tabs in the site panel. Saving the same
+  // provider twice replaces that entry; saving a different provider
+  // appends a new one. Migrates any legacy single-site entries on load.
+  const [siteByPlaceId, setSiteByPlaceId] = useState<Map<string, GeneratedSite[]>>(() => {
+    try {
+      const raw = window.localStorage.getItem(LS_SITE_KEY);
+      if (!raw) return new Map();
+      const parsed = JSON.parse(raw) as Array<[string, GeneratedSite | GeneratedSite[]]>;
+      return new Map(
+        parsed.map(([k, v]) => [k, Array.isArray(v) ? v : [v]] as [string, GeneratedSite[]]),
+      );
+    } catch {
+      return new Map();
+    }
+  });
   const [businessByPlaceId, setBusinessByPlaceId] = useState<Map<string, BusinessDetails>>(
     () => loadMap<BusinessDetails>(LS_BUSINESS_KEY),
   );
@@ -390,11 +404,16 @@ export default function App() {
       }
       if (!record.site) throw new Error("Generation finished with no site payload");
       // Stash both the site and the enriched business into per-row caches —
-      // SitePreview needs both. Replaces any earlier cached pair for this row.
+      // SitePreview needs both. The site array accumulates per provider:
+      // an API run uses provider="v3_<provider>" so it doesn't collide
+      // with the manual:claude / manual:chatgpt / manual:gemini entries.
       const generated = record.site;
       setSiteByPlaceId((prev) => {
         const next = new Map(prev);
-        next.set(b.place_id, generated);
+        const existing = next.get(b.place_id) ?? [];
+        const filtered = existing.filter((s) => s.provider !== generated.provider);
+        filtered.push(generated);
+        next.set(b.place_id, filtered);
         return next;
       });
       setBusinessByPlaceId((prev) => {
@@ -412,13 +431,19 @@ export default function App() {
     }
   }
 
-  // Persist a manually-generated site (pasted from claude.ai web) into the
-  // same per-row caches an API run would have populated. The site keeps a
-  // generated_by="manual" marker so SitePreview can label it accordingly.
+  // Persist a manually-generated site (pasted from claude.ai / chatgpt /
+  // gemini web) into the same per-row caches an API run would have
+  // populated. The array accumulates one entry per provider so the
+  // operator can compare outputs side-by-side in the site panel — saving
+  // the same provider twice replaces that entry, saving a different
+  // provider appends a new one.
   function saveManualSite(placeId: string, site: GeneratedSite) {
     setSiteByPlaceId((prev) => {
       const next = new Map(prev);
-      next.set(placeId, site);
+      const existing = next.get(placeId) ?? [];
+      const filtered = existing.filter((s) => s.provider !== site.provider);
+      filtered.push(site);
+      next.set(placeId, filtered);
       return next;
     });
     setSelectedId(placeId);
@@ -597,9 +622,12 @@ export default function App() {
           // Cumulative manual-generation footprint, derived from siteByPlaceId.
           // Persists with the cache, so the number includes every manual site
           // ever saved in this browser (until the operator clears storage).
-          const manualSites = Array.from(siteByPlaceId.values()).filter(
-            (s) => s.generated_by === "manual",
-          );
+          // siteByPlaceId is a Map<string, GeneratedSite[]> — flatten before
+          // filtering so we count every saved version (Claude + ChatGPT +
+          // Gemini side-by-side all count individually).
+          const manualSites = Array.from(siteByPlaceId.values())
+            .flat()
+            .filter((s) => s.generated_by === "manual");
           if (manualSites.length === 0) return null;
           const inTok = manualSites.reduce(
             (a, s) => a + (s.input_tokens_estimate ?? 0),
